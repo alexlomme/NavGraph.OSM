@@ -1,15 +1,17 @@
 #include <cmath>
-#include <osmium/osm/location.hpp>
 
 const double EARTH_RADIUS = 6370.986884258304;
 
-constexpr double degToRad(double deg) { return deg * M_PI / 180; }
+constexpr double RAD = M_PI / 180;
 
-double geopointsDistance(osmium::Location source, osmium::Location target) {
-    double sourceLat = degToRad(source.lat());
-    double sourceLon = degToRad(source.lon());
-    double targetLat = degToRad(target.lat());
-    double targetLon = degToRad(target.lon());
+double degToRad(double deg) { return deg * RAD; }
+
+double geopointsDistance(std::pair<double, double> source,
+                         std::pair<double, double> target) {
+    double sourceLat = degToRad(source.first);
+    double sourceLon = degToRad(source.second);
+    double targetLat = degToRad(target.first);
+    double targetLon = degToRad(target.second);
 
     double diffLat = targetLat - sourceLat;
     double diffLon = targetLon - sourceLon;
@@ -20,9 +22,9 @@ double geopointsDistance(osmium::Location source, osmium::Location target) {
     return ans;
 }
 
-double wayCost(std::vector<osmium::Location> locations) {
+double wayCost(std::vector<std::pair<double, double>> locations) {
     auto source = *(locations.begin());
-    osmium::Location target;
+    std::pair<double, double> target;
 
     double cost = 0;
 
