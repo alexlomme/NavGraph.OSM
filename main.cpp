@@ -78,12 +78,15 @@ int main(int argc, char* argv[]) {
         parser::PrimitiveBlockParser parser(primitiveBlock);
 
         parser.parse(graph);
+
+        free(uncompressedData);
     }
 
     try {
         graph.convert();
     } catch (std::runtime_error e) {
         std::cerr << e.what() << std::endl;
+        return -1;
     }
 
     std::string outputFile = argc > 2 ? argv[2] : "output.csv";
