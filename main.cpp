@@ -2,8 +2,8 @@
 #include <osmpbf/fileformat.pb.h>
 
 #include <fstream>
-#include <graph.hpp>
 #include <inflate.hpp>
+#include <parser-types.hpp>
 #include <sstream>
 
 int main(int argc, char* argv[]) {
@@ -23,8 +23,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    std::vector<parser::Way> ways;
-    std::unordered_map<google::protobuf::int64, parser::Node> nodes;
+    parser::Graph graph;
 
     while (!file.eof()) {
         uint32_t headerSize;
@@ -78,14 +77,14 @@ int main(int argc, char* argv[]) {
 
         parser::PrimitiveBlockParser parser(primitiveBlock);
 
-        parser.parse(ways, nodes);
+        parser.parse(graph);
     }
 
-    std::unordered_multimap<google::protobuf::int64, google::protobuf::int64>
-        graph;
-    std::unordered_map<google::protobuf::int64, parser::Edge> edges;
-
-    convertToGraph(ways, nodes, &graph, &edges);
+    try {
+        graph.convert();
+    } catch (std::runtime_error e) {
+        std::cerr << e.what() << std::endl;
+    }
 
     std::string outputFile = argc > 2 ? argv[2] : "output.csv";
 
@@ -96,7 +95,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    for (auto& pair : edges) {
+    for (auto& pair : graph.edges()) {
         auto edge = pair.second;
         auto source = edge.sourceNode;
         auto target = edge.targetNode;
