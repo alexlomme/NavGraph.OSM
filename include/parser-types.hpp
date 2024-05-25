@@ -133,7 +133,7 @@ struct PrimitiveBlockParser {
             int64_t prevLon = 0;
             int64_t prevLat = 0;
 
-            for (uint64_t i = 0; i < denseNodes.id_size(); i++) {
+            for (int64_t i = 0; i < denseNodes.id_size(); i++) {
                 auto deltaId = denseNodes.id(i);
                 auto deltaLat = denseNodes.lat(i);
                 auto deltaLon = denseNodes.lon(i);

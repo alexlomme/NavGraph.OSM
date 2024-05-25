@@ -79,13 +79,13 @@ int main(int argc, char* argv[]) {
 
         parser.parse(graph);
 
-        free(uncompressedData);
+        delete uncompressedData;
     }
 
     try {
         graph.convert();
-    } catch (std::runtime_error e) {
-        std::cerr << e.what() << std::endl;
+    } catch (std::runtime_error* e) {
+        std::cerr << e->what() << std::endl;
         return -1;
     }
 
