@@ -7,113 +7,116 @@
 #include <sstream>
 
 int main(int argc, char* argv[]) {
-    GOOGLE_PROTOBUF_VERIFY_VERSION;
+  GOOGLE_PROTOBUF_VERIFY_VERSION;
 
-    if (argc < 2) {
-        std::cerr << "No input file passed" << std::endl;
-        return 1;
+  if (argc < 2) {
+    std::cerr << "No input file passed" << std::endl;
+    return 1;
+  }
+
+  std::string filename = argv[1];
+
+  std::ifstream file(filename, std::ios::in | std::ios::binary);
+
+  if (!file.is_open()) {
+    std::cerr << "Error opening input file";
+    return 1;
+  }
+
+  parser::Graph graph;
+
+  while (!file.eof()) {
+    uint32_t headerSize;
+    file.read(reinterpret_cast<char*>(&headerSize), sizeof(headerSize));
+    if (file.eof()) break;
+    headerSize = ntohl(headerSize);
+
+    std::vector<char> headerData(headerSize);
+    file.read(headerData.data(), headerSize);
+
+    OSMPBF::BlobHeader blobHeader;
+
+    if (!blobHeader.ParseFromArray(headerData.data(), headerSize)) {
+      std::cerr << "Error while reading BlobHeader" << std::endl;
+      return -1;
     }
 
-    std::string filename = argv[1];
+    uint32_t blobSize = blobHeader.datasize();
+    std::vector<char> data(blobSize);
+    file.read(data.data(), blobSize);
 
-    std::ifstream file(filename, std::ios::in | std::ios::binary);
+    OSMPBF::Blob blob;
 
-    if (!file.is_open()) {
-        std::cerr << "Error opening input file";
-        return 1;
+    if (!blob.ParseFromArray(data.data(), blobSize)) {
+      std::cerr << "Error while reading blob" << std::endl;
+      return -1;
     }
 
-    parser::Graph graph;
-
-    while (!file.eof()) {
-        uint32_t headerSize;
-        file.read(reinterpret_cast<char*>(&headerSize), sizeof(headerSize));
-        if (file.eof()) break;
-        headerSize = ntohl(headerSize);
-
-        std::vector<char> headerData(headerSize);
-        file.read(headerData.data(), headerSize);
-
-        OSMPBF::BlobHeader blobHeader;
-
-        if (!blobHeader.ParseFromArray(headerData.data(), headerSize)) {
-            std::cerr << "Error while reading BlobHeader" << std::endl;
-            return -1;
-        }
-
-        uint32_t blobSize = blobHeader.datasize();
-        std::vector<char> data(blobSize);
-        file.read(data.data(), blobSize);
-
-        OSMPBF::Blob blob;
-
-        if (!blob.ParseFromArray(data.data(), blobSize)) {
-            std::cerr << "Error while reading blob" << std::endl;
-            return -1;
-        }
-
-        if (blobHeader.type() != "OSMData") {
-            continue;
-        }
-
-        unsigned char* uncompressedData = new unsigned char[blob.raw_size()];
-
-        if (blob.has_raw()) {
-            const std::string rawData = blob.raw();
-            std::copy(rawData.begin(), rawData.end(), uncompressedData);
-        } else if (blob.has_zlib_data()) {
-            decompress(blob.zlib_data(), uncompressedData, blob.raw_size());
-        } else {
-            std::cerr << "Unsupported compression format" << std::endl;
-            return -1;
-        }
-
-        OSMPBF::PrimitiveBlock primitiveBlock;
-
-        if (!primitiveBlock.ParseFromArray(uncompressedData, blob.raw_size())) {
-            std::cerr << "Unable to parse primitive block" << std::endl;
-            return -1;
-        }
-
-        parser::PrimitiveBlockParser parser(primitiveBlock);
-
-        parser.parse(graph);
-
-        delete uncompressedData;
+    if (blobHeader.type() != "OSMData") {
+      continue;
     }
 
-    try {
-        graph.convert();
-    } catch (const std::runtime_error& e) {
-        std::cerr << e.what() << std::endl;
-        return -1;
+    unsigned char* uncompressedData = new unsigned char[blob.raw_size()];
+
+    if (blob.has_raw()) {
+      const std::string rawData = blob.raw();
+      std::copy(rawData.begin(), rawData.end(), uncompressedData);
+    } else if (blob.has_zlib_data()) {
+      decompress(blob.zlib_data(), uncompressedData, blob.raw_size());
+    } else {
+      std::cerr << "Unsupported compression format" << std::endl;
+      return -1;
     }
 
-    std::string outputFile = argc > 2 ? argv[2] : "output.csv";
+    OSMPBF::PrimitiveBlock primitiveBlock;
 
-    std::ofstream ofile(outputFile);
-
-    if (!ofile.is_open()) {
-        std::cerr << "Error opening file" << std::endl;
-        return 1;
+    if (!primitiveBlock.ParseFromArray(uncompressedData, blob.raw_size())) {
+      std::cerr << "Unable to parse primitive block" << std::endl;
+      return -1;
     }
 
-    for (auto& pair : graph.edges()) {
-        auto edge = pair.second;
-        auto source = edge.sourceNode;
-        auto target = edge.targetNode;
+    parser::PrimitiveBlockParser parser(primitiveBlock);
 
-        std::ostringstream sourceStream;
-        sourceStream << "(" << source.lon << " " << source.lat << ")";
+    parser.parse(graph);
 
-        std::ostringstream targetStream;
-        targetStream << "(" << target.lon << " " << target.lat << ")";
+    delete uncompressedData;
+  }
 
-        ofile << sourceStream.str() << "," << targetStream.str() << ","
-              << edge.cost << std::endl;
-    }
+  try {
+    graph.convert();
+  } catch (const std::runtime_error& e) {
+    std::cerr << e.what() << std::endl;
+    return -1;
+  }
 
-    file.close();
+  std::string outputFile = argc > 2 ? argv[2] : "output.csv";
 
-    return 0;
+  std::ofstream ofile(outputFile);
+
+  if (!ofile.is_open()) {
+    std::cerr << "Error opening file" << std::endl;
+    return 1;
+  }
+
+  for (auto& pair : graph.expaned_edges()) {
+    auto edge = pair.second;
+    // auto source = edge.sourceNode;
+    // auto target = edge.targetNode;
+
+    // std::ostringstream sourceStream;
+    // sourceStream << "(" << source.lon << " " << source.lat << ")";
+
+    // std::ostringstream targetStream;
+    // targetStream << "(" << target.lon << " " << target.lat << ")";
+
+    // ofile << sourceStream.str() << "," << targetStream.str() << "," <<
+    // edge.cost
+    //       << std::endl;
+
+    ofile << edge.id << std::endl;
+  }
+
+  file.close();
+
+  return 0;
 }
