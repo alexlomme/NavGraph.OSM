@@ -64,29 +64,27 @@ struct Restriction : parser::Relation {
   std::string type;
 };
 
-// struct Highway : parser::Way {
-//   enum Type {
-//     motorway = 'motorway',
-//   };
-
-//  public:
-//   Highway(google::protobuf::int64 id,
-//           std::vector<google::protobuf::int64> nodes)
-//       : parser::Way(id, nodes) {}
-
-//  private:
-//   Highway::Type type;
-//   std::string name;
-//   std::string ref;
-//   bool oneway;
-// };
-
 struct Graph {
  public:
   void add_way(parser::Way&& way) {
     ways.insert(std::make_pair(way.id, way));
-    for (auto node : way.nodes) {
-      nodesInWays.insert(node);
+    for (uint64_t i = 0; i < way.nodes.size(); i++) {
+      auto nodeId = way.nodes[i];
+      auto nodeEntryIt = nodesInWays.find(nodeId);
+
+      if (nodeEntryIt == nodesInWays.end()) {
+        if (i == 0 || i == way.nodes.size() - 1) {
+          nodesInWays.insert(std::make_pair(nodeId, 2));
+        } else {
+          nodesInWays.insert(std::make_pair(nodeId, 1));
+        }
+      } else {
+        if (i == 0 || i == way.nodes.size() - 1) {
+          nodeEntryIt->second += 2;
+        } else {
+          nodeEntryIt->second++;
+        }
+      }
     }
   }
 
@@ -103,20 +101,20 @@ struct Graph {
       return nodesInWays.find(nodePair.first) == nodesInWays.end();
     });
 
-    for (auto& wayPair : ways) {
-      auto& way = wayPair.second;
-      for (auto nodeId : way.nodes) {
-        auto nodeIt = nodes.find(nodeId);
-        if (nodeId == way.nodes[0] ||
-            nodeId == way.nodes[way.nodes.size() - 1]) {
-          nodeIt->second.used += 2;
-        } else {
-          nodeIt->second.used++;
-        }
-      }
-    }
+    // for (auto& wayPair : ways) {
+    //   auto& way = wayPair.second;
+    //   for (auto nodeId : way.nodes) {
+    //     auto nodeIt = nodes.find(nodeId);
+    //     if (nodeId == way.nodes[0] ||
+    //         nodeId == way.nodes[way.nodes.size() - 1]) {
+    //       nodeIt->second.used += 2;
+    //     } else {
+    //       nodeIt->second.used++;
+    //     }
+    //   }
+    // }
 
-    nodesInWays.clear();
+    // nodesInWays.clear();
 
     std::cerr << "Ways: " << ways.size() << std::endl;
     std::cerr << "Nodes: " << nodes.size() << std::endl;
@@ -144,7 +142,13 @@ struct Graph {
 
         locations.push_back(std::make_pair(node.lat, node.lon));
 
-        if (i == 0 || node.used <= 1) {
+        auto nodeUsedPairIt = nodesInWays.find(nodeId);
+
+        if (nodeUsedPairIt == nodesInWays.end()) {
+          throw std::runtime_error("");
+        }
+
+        if (i == 0 || nodeUsedPairIt->second <= 1) {
           continue;
         }
 
@@ -312,7 +316,7 @@ struct Graph {
   std::unordered_multimap<google::protobuf::int64, parser::Restriction>
       restrictions;
   std::unordered_map<google::protobuf::int64, parser::Node> nodes;
-  std::unordered_set<google::protobuf::int64> nodesInWays;
+  std::unordered_map<google::protobuf::int64, uint64_t> nodesInWays;
 
   // graph from initially parsed data
   std::unordered_map<google::protobuf::int64,

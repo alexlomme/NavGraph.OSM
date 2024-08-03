@@ -16,7 +16,8 @@ CXXFLAGS		   := -Wall -std=c++20 $(INCLUDE_FLAGS) -g -lz -lprotobuf \
     -labsl_log_internal_message \
     -labsl_log_internal_nullguard \
     -labsl_log_internal_proto
-SRC				   := ./include/osmpbf/osmformat.pb.cc ./include/osmpbf/fileformat.pb.cc
+SRC				   := ./include/osmpbf/osmformat.pb.cc ./include/osmpbf/fileformat.pb.cc ./include/parsing/primitive-block-parser.cpp ./include/types/graph.cpp \
+                        ./include/utils/geomath.cpp
 # -lz -lexpat -lbz2
 
 main:

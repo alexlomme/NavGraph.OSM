@@ -2,9 +2,10 @@
 #include <osmpbf/fileformat.pb.h>
 
 #include <fstream>
-#include <inflate.hpp>
-#include <parser-types.hpp>
+#include <parsing/primitive-block-parser.hpp>
 #include <sstream>
+#include <types/graph.hpp>
+#include <utils/inflate.hpp>
 
 int main(int argc, char* argv[]) {
   GOOGLE_PROTOBUF_VERIFY_VERSION;
@@ -79,7 +80,7 @@ int main(int argc, char* argv[]) {
 
     parser.parse(graph);
 
-    delete uncompressedData;
+    delete[] uncompressedData;
   }
 
   try {
