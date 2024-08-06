@@ -14,6 +14,7 @@
 #include <types/relation.hpp>
 #include <types/way.hpp>
 #include <utils/inflate.hpp>
+#include <utils/libdeflate_decomp.hpp>
 
 constexpr uint64_t NODES_IN_L1 = 2000000;
 
@@ -44,10 +45,24 @@ int main(int argc, char* argv[]) {
       restrictions;
   std::vector<parser::Node> nodes;
 
-  while (!file.eof()) {
+  auto startEof = std::chrono::high_resolution_clock::now();
+  while (file) {
+    std::cerr << "Time for eof: "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     std::chrono::high_resolution_clock::now() - startEof)
+                     .count()
+              << "ms" << std::endl;
+
     uint32_t headerSize;
     file.read(reinterpret_cast<char*>(&headerSize), sizeof(headerSize));
-    if (file.eof()) {
+    startEof = std::chrono::high_resolution_clock::now();
+    if (!file) {
+      std::cerr << "Time for eof: "
+                << std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::high_resolution_clock::now() - startEof)
+                       .count()
+                << "ms" << std::endl;
+
       break;
     }
     headerSize = ntohl(headerSize);
@@ -73,32 +88,59 @@ int main(int argc, char* argv[]) {
     }
 
     if (blobHeader.type() != "OSMData") {
+      startEof = std::chrono::high_resolution_clock::now();
       continue;
     }
 
     unsigned char* uncompressedData = new unsigned char[blob.raw_size()];
 
+    auto decomp = std::chrono::high_resolution_clock::now();
     if (blob.has_raw()) {
       const std::string rawData = blob.raw();
       std::copy(rawData.begin(), rawData.end(), uncompressedData);
     } else if (blob.has_zlib_data()) {
-      decompress(blob.zlib_data(), uncompressedData, blob.raw_size());
+      ldeflate_decompress(blob.zlib_data(), uncompressedData, blob.raw_size());
     } else {
       std::cerr << "Unsupported compression format" << std::endl;
       return -1;
     }
+    std::cerr << "Decompression: "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     std::chrono::high_resolution_clock::now() - decomp)
+                     .count()
+              << "ms" << std::endl;
 
     OSMPBF::PrimitiveBlock primitiveBlock;
 
+    auto primBl = std::chrono::high_resolution_clock::now();
     if (!primitiveBlock.ParseFromArray(uncompressedData, blob.raw_size())) {
       std::cerr << "Unable to parse primitive block" << std::endl;
       return -1;
     }
+    std::cerr << "ParseFromArray prim block: "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     std::chrono::high_resolution_clock::now() - primBl)
+                     .count()
+              << "ms" << std::endl;
 
+    auto parsing = std::chrono::high_resolution_clock::now();
     parser::primitive_block::parse(primitiveBlock, nodes, ways, restrictions);
+    std::cerr << "Parsing: "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     std::chrono::high_resolution_clock::now() - parsing)
+                     .count()
+              << "ms" << std::endl;
 
     delete[] uncompressedData;
+
+    startEof = std::chrono::high_resolution_clock::now();
   }
+
+  std::cerr << "Time for eof: "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(
+                   std::chrono::high_resolution_clock::now() - startEof)
+                   .count()
+            << "ms" << std::endl;
 
   auto parseEnd = std::chrono::high_resolution_clock::now();
 
@@ -231,18 +273,6 @@ int main(int argc, char* argv[]) {
   }
 
   file.close();
-
-  std::ofstream ofile1("vertices.csv");
-
-  if (!ofile1.is_open()) {
-    std::cerr << "Error opening file" << std::endl;
-    return 1;
-  }
-
-  for (auto nodePair : nodesHashMap) {
-    ofile1 << nodePair.second->id << "," << nodePair.second->lat << ","
-           << nodePair.second->lon << std::endl;
-  }
 
   return 0;
 }

@@ -64,11 +64,11 @@ void parser::primitive_block::parse(
       wayBuffer.push_back(parser::Way{parsedWay.id(), nodeRefs, oneway});
     }
 
-    std::cerr << "Parsed ways in "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(
-                     std::chrono::high_resolution_clock::now() - start)
-                     .count()
-              << "ms" << std::endl;
+    // std::cerr << "Parsed ways in "
+    //           << std::chrono::duration_cast<std::chrono::milliseconds>(
+    //                  std::chrono::high_resolution_clock::now() - start)
+    //                  .count()
+    //           << "ms" << std::endl;
 
     start = std::chrono::high_resolution_clock::now();
 
@@ -149,11 +149,11 @@ void parser::primitive_block::parse(
           via, parser::Restriction{from, via, to, restrictionType}));
     }
 
-    std::cerr << "Parsed restrictions in "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(
-                     std::chrono::high_resolution_clock::now() - start)
-                     .count()
-              << "ms" << std::endl;
+    // std::cerr << "Parsed restrictions in "
+    //           << std::chrono::duration_cast<std::chrono::milliseconds>(
+    //                  std::chrono::high_resolution_clock::now() - start)
+    //                  .count()
+    //           << "ms" << std::endl;
 
     start = std::chrono::high_resolution_clock::now();
 
@@ -166,11 +166,11 @@ void parser::primitive_block::parse(
       nodeBuffer.push_back(parser::Node{parsedNode.id(), lat, lon, 0});
     }
 
-    std::cerr << "Parsed nodes in "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(
-                     std::chrono::high_resolution_clock::now() - start)
-                     .count()
-              << "ms" << std::endl;
+    // std::cerr << "Parsed nodes in "
+    //           << std::chrono::duration_cast<std::chrono::milliseconds>(
+    //                  std::chrono::high_resolution_clock::now() - start)
+    //                  .count()
+    //           << "ms" << std::endl;
 
     start = std::chrono::high_resolution_clock::now();
 
@@ -206,11 +206,11 @@ void parser::primitive_block::parse(
       prevLon = lonCoord;
     }
 
-    std::cerr << "Parsed dense nodes in "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(
-                     std::chrono::high_resolution_clock::now() - start)
-                     .count()
-              << "ms" << std::endl;
+    // std::cerr << "Parsed dense nodes in "
+    //           << std::chrono::duration_cast<std::chrono::milliseconds>(
+    //                  std::chrono::high_resolution_clock::now() - start)
+    //                  .count()
+    //           << "ms" << std::endl;
   }
 }
 

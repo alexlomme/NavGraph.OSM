@@ -55,7 +55,8 @@ void parser::graph::Graph::invert(
       auto targetEdgeIt =
           std::find_if(edges.begin(), edges.end(), [&](auto& edgePair) {
             return edgePair.second.wayPtr->id ==
-                   mandatoryRestrictionPairIt->second.to;
+                       mandatoryRestrictionPairIt->second.to &&
+                   edgePair.second.sourceNodePtr->id == viaNodeId;
           });
 
       if (targetEdgeIt != edges.end()) {
