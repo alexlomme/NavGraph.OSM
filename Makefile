@@ -15,13 +15,13 @@ CXXFLAGS		   := -Wall -std=c++20 $(INCLUDE_FLAGS) -g -lz -lprotobuf \
     -labsl_log_internal_log_sink_set \
     -labsl_log_internal_message \
     -labsl_log_internal_nullguard \
-    -labsl_log_internal_proto
-SRC				   := ./include/osmpbf/osmformat.pb.cc ./include/osmpbf/fileformat.pb.cc ./include/parsing/primitive-block-parser.cpp ./include/types/graph.cpp \
-                        ./include/utils/geomath.cpp
+    -labsl_log_internal_proto 
+SRC				   := ./include/osmpbf/osmformat.pb.cc ./include/osmpbf/fileformat.pb.cc ./include/parsing/primitive-block-parser.cpp \
+                        ./include/utils/geomath.cpp ./include/graph/graph.cpp ./include/graph/ways-to-edges.cpp
 # -lz -lexpat -lbz2
 
 main:
-	$(CXX) main.cpp $(SRC) $(CXXFLAGS) -o main
+	$(CXX) -g main.cpp $(SRC) $(CXXFLAGS) -o main
 
 clean: 
 	$(RM) main	

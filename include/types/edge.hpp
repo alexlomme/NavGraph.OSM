@@ -2,12 +2,15 @@
 
 #include <osmpbf/osmformat.pb.h>
 
+#include <types/node.hpp>
+#include <types/way.hpp>
+
 namespace parser {
 struct Edge {
   google::protobuf::int64 id;
-  google::protobuf::int64 wayId;
-  google::protobuf::int64 sourceNode;
-  google::protobuf::int64 targetNode;
+  parser::Way* wayPtr;
+  parser::Node* sourceNodePtr;
+  parser::Node* targetNodePtr;
   double cost;
 };
 }  // namespace parser

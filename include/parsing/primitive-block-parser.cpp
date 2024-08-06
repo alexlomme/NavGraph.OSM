@@ -1,24 +1,23 @@
 
 #include "primitive-block-parser.hpp"
 
-namespace parser {
+#include <chrono>
 
-parser::PrimitiveBlockParser::PrimitiveBlockParser(
-    OSMPBF::PrimitiveBlock& block)
-    : block(block) {}
+std::unordered_set<std::string> highwayTypes{
+    "motorway",      "primary",        "primary_link", "road",
+    "secondary",     "secondary_link", "residential",  "tertiary",
+    "tertiary_link", "unclassified",   "trunk",        "trunk_link",
+    "motorway_link"};
 
-double parser::PrimitiveBlockParser::convertLat(google::protobuf::int64 coord) {
-  return convertCoord(block.lat_offset(), coord);
-}
-
-double parser::PrimitiveBlockParser::convertLon(google::protobuf::int64 coord) {
-  return convertCoord(block.lon_offset(), coord);
-}
-
-void parser::PrimitiveBlockParser::parse(parser::Graph& graph) {
+void parser::primitive_block::parse(
+    OSMPBF::PrimitiveBlock& block, std::vector<parser::Node>& nodeBuffer,
+    std::vector<parser::Way>& wayBuffer,
+    std::unordered_multimap<google::protobuf::int64, parser::Restriction>&
+        restrictionBuffer) {
   auto stringTable = block.stringtable();
 
   for (auto& group : block.primitivegroup()) {
+    auto start = std::chrono::high_resolution_clock::now();
     for (auto& parsedWay : group.ways()) {
       auto& keys = parsedWay.keys();
       auto& values = parsedWay.vals();
@@ -33,8 +32,7 @@ void parser::PrimitiveBlockParser::parse(parser::Graph& graph) {
       std::string highwayType =
           stringTable.s(values[std::distance(keys.begin(), highwayIt)]);
 
-      if (std::find(highwayTypes.begin(), highwayTypes.end(), highwayType) ==
-          highwayTypes.end()) {
+      if (highwayTypes.find(highwayType) == highwayTypes.end()) {
         continue;
       }
 
@@ -63,8 +61,16 @@ void parser::PrimitiveBlockParser::parse(parser::Graph& graph) {
         prevValue += nodeRef;
       }
 
-      graph.add_way(parser::Way{parsedWay.id(), nodeRefs, oneway});
+      wayBuffer.push_back(parser::Way{parsedWay.id(), nodeRefs, oneway});
     }
+
+    std::cerr << "Parsed ways in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     std::chrono::high_resolution_clock::now() - start)
+                     .count()
+              << "ms" << std::endl;
+
+    start = std::chrono::high_resolution_clock::now();
 
     for (auto& parsedRelation : group.relations()) {
       auto& keys = parsedRelation.keys();
@@ -139,16 +145,34 @@ void parser::PrimitiveBlockParser::parse(parser::Graph& graph) {
         continue;
       }
 
-      graph.add_restriction(
-          parser::Restriction{from, via, to, restrictionType});
+      restrictionBuffer.insert(std::make_pair(
+          via, parser::Restriction{from, via, to, restrictionType}));
     }
+
+    std::cerr << "Parsed restrictions in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     std::chrono::high_resolution_clock::now() - start)
+                     .count()
+              << "ms" << std::endl;
+
+    start = std::chrono::high_resolution_clock::now();
 
     for (auto& parsedNode : group.nodes()) {
-      auto lat = convertLat(parsedNode.lat());
-      auto lon = convertLon(parsedNode.lon());
+      auto lat = convertCoord(block.lat_offset(), block.granularity(),
+                              parsedNode.lat());
+      auto lon = convertCoord(block.lon_offset(), block.granularity(),
+                              parsedNode.lon());
 
-      graph.add_node(parser::Node{parsedNode.id(), lat, lon, 0});
+      nodeBuffer.push_back(parser::Node{parsedNode.id(), lat, lon, 0});
     }
+
+    std::cerr << "Parsed nodes in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     std::chrono::high_resolution_clock::now() - start)
+                     .count()
+              << "ms" << std::endl;
+
+    start = std::chrono::high_resolution_clock::now();
 
     auto& denseNodes = group.dense();
 
@@ -167,22 +191,31 @@ void parser::PrimitiveBlockParser::parse(parser::Graph& graph) {
       auto deltaLon = denseNodes.lon(i);
 
       int64_t id = deltaId + prevId;
+      int64_t latCoord = deltaLat + prevLat;
+      int64_t lonCoord = deltaLon + prevLon;
 
-      auto lat = convertLat(deltaLat + prevLat);
-      auto lon = convertLon(deltaLon + prevLon);
+      auto lat =
+          convertCoord(block.lat_offset(), block.granularity(), latCoord);
+      auto lon =
+          convertCoord(block.lon_offset(), block.granularity(), lonCoord);
 
-      graph.add_node(parser::Node{id, lat, lon, 0});
+      nodeBuffer.push_back(Node{id, lat, lon, 0});
 
-      prevId += deltaId;
-      prevLat += deltaLat;
-      prevLon += deltaLon;
+      prevId = id;
+      prevLat = latCoord;
+      prevLon = lonCoord;
     }
+
+    std::cerr << "Parsed dense nodes in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     std::chrono::high_resolution_clock::now() - start)
+                     .count()
+              << "ms" << std::endl;
   }
 }
 
-double parser::PrimitiveBlockParser::convertCoord(
-    google::protobuf::int64 offset, google::protobuf::int64 coord) {
-  return (offset + block.granularity() * coord) / pow(10, 9);
+double parser::primitive_block::convertCoord(int64_t offset,
+                                             int32_t granularity,
+                                             int64_t coord) {
+  return (offset + granularity * coord) / pow(10, 9);
 }
-
-}  // namespace parser
