@@ -15,12 +15,9 @@ namespace primitive_block {
 
 void parse(OSMPBF::PrimitiveBlock& block, std::vector<parser::Node>& nodeBuffer,
            std::vector<parser::Way>& wayBuffer,
-           std::unordered_multimap<google::protobuf::int64,
-                                   parser::Restriction>& restrictionBuffer);
+           std::vector<parser::Restriction>& restrictionBuffer);
 
-double convertCoord(google::protobuf::int64 offset,
-                    google::protobuf::int32 granularity,
-                    google::protobuf::int64 coord);
+double convertCoord(int64_t offset, int32_t granularity, int64_t coord);
 
 // };
 }  // namespace primitive_block

@@ -9,6 +9,7 @@
 #include <types/expanded-edge.hpp>
 #include <types/node.hpp>
 #include <types/relation.hpp>
+#include <utils/hashing.hpp>
 
 namespace parser {
 namespace graph {
@@ -17,16 +18,30 @@ struct Graph {
   Graph(std::unordered_map<google::protobuf::int64, parser::Edge>& edges);
 
   void invert(std::unordered_map<google::protobuf::int64, parser::Edge>& edges,
-              std::unordered_multimap<google::protobuf::int64,
-                                      parser::Restriction>& restrictions,
+              std::unordered_multimap<
+                  std::tuple<google::protobuf::int64, google::protobuf::int64>,
+                  parser::Restriction*>& mandatoryRestrictions,
+              std::unordered_map<
+                  std::tuple<google::protobuf::int64, google::protobuf::int64,
+                             google::protobuf::int64>,
+                  parser::Restriction*>& forbidRestrictions,
               std::unordered_map<google::protobuf::int64, parser::ExpandedEdge>&
-                  expEdgeBuf);
+                  expEdgesBuffer);
+
+  std::unordered_map<google::protobuf::int64,
+                     std::vector<parser::Edge*>>::iterator
+  find(google::protobuf::int64 nodeId);
+
+  std::unordered_map<google::protobuf::int64,
+                     std::vector<parser::Edge*>>::iterator
+  end();
 
  private:
+  std::unordered_map<google::protobuf::int64, std::vector<parser::Edge*>>
+      vertEdgeMap;
   std::unordered_map<google::protobuf::int64,
                      std::vector<google::protobuf::int64>>
-      vertEdgeMap;
-  bool inverted;
+      invVertEdgeMap;
 };
 }  // namespace graph
 }  // namespace parser

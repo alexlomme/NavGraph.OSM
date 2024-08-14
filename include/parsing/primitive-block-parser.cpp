@@ -12,12 +12,10 @@ std::unordered_set<std::string> highwayTypes{
 void parser::primitive_block::parse(
     OSMPBF::PrimitiveBlock& block, std::vector<parser::Node>& nodeBuffer,
     std::vector<parser::Way>& wayBuffer,
-    std::unordered_multimap<google::protobuf::int64, parser::Restriction>&
-        restrictionBuffer) {
+    std::vector<parser::Restriction>& restrictionBuffer) {
   auto stringTable = block.stringtable();
 
   for (auto& group : block.primitivegroup()) {
-    auto start = std::chrono::high_resolution_clock::now();
     for (auto& parsedWay : group.ways()) {
       auto& keys = parsedWay.keys();
       auto& values = parsedWay.vals();
@@ -64,13 +62,7 @@ void parser::primitive_block::parse(
       wayBuffer.push_back(parser::Way{parsedWay.id(), nodeRefs, oneway});
     }
 
-    // std::cerr << "Parsed ways in "
-    //           << std::chrono::duration_cast<std::chrono::milliseconds>(
-    //                  std::chrono::high_resolution_clock::now() - start)
-    //                  .count()
-    //           << "ms" << std::endl;
-
-    start = std::chrono::high_resolution_clock::now();
+    uint64_t total = 0;
 
     for (auto& parsedRelation : group.relations()) {
       auto& keys = parsedRelation.keys();
@@ -145,17 +137,11 @@ void parser::primitive_block::parse(
         continue;
       }
 
-      restrictionBuffer.insert(std::make_pair(
-          via, parser::Restriction{from, via, to, restrictionType}));
+      total++;
+
+      restrictionBuffer.push_back(
+          parser::Restriction{from, via, to, restrictionType});
     }
-
-    // std::cerr << "Parsed restrictions in "
-    //           << std::chrono::duration_cast<std::chrono::milliseconds>(
-    //                  std::chrono::high_resolution_clock::now() - start)
-    //                  .count()
-    //           << "ms" << std::endl;
-
-    start = std::chrono::high_resolution_clock::now();
 
     for (auto& parsedNode : group.nodes()) {
       auto lat = convertCoord(block.lat_offset(), block.granularity(),
@@ -165,14 +151,6 @@ void parser::primitive_block::parse(
 
       nodeBuffer.push_back(parser::Node{parsedNode.id(), lat, lon, 0});
     }
-
-    // std::cerr << "Parsed nodes in "
-    //           << std::chrono::duration_cast<std::chrono::milliseconds>(
-    //                  std::chrono::high_resolution_clock::now() - start)
-    //                  .count()
-    //           << "ms" << std::endl;
-
-    start = std::chrono::high_resolution_clock::now();
 
     auto& denseNodes = group.dense();
 
@@ -205,12 +183,6 @@ void parser::primitive_block::parse(
       prevLat = latCoord;
       prevLon = lonCoord;
     }
-
-    // std::cerr << "Parsed dense nodes in "
-    //           << std::chrono::duration_cast<std::chrono::milliseconds>(
-    //                  std::chrono::high_resolution_clock::now() - start)
-    //                  .count()
-    //           << "ms" << std::endl;
   }
 }
 
