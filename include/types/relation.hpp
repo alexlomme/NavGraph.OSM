@@ -5,19 +5,21 @@
 namespace parser {
 struct Relation {
  public:
-  Relation(google::protobuf::int64 from, google::protobuf::int64 via,
-           google::protobuf::int64 to)
-      : from(from), via(via), to(to) {}
+  Relation(google::protobuf::int64 id, google::protobuf::int64 from,
+           google::protobuf::int64 via, google::protobuf::int64 to)
+      : id(id), from(from), via(via), to(to) {}
 
+  google::protobuf::int64 id;
   google::protobuf::int64 from;
   google::protobuf::int64 via;
   google::protobuf::int64 to;
 };
 
 struct Restriction : parser::Relation {
-  Restriction(google::protobuf::int64 from, google::protobuf::int64 via,
-              google::protobuf::int64 to, std::string type)
-      : parser::Relation(from, via, to), type(type) {}
+  Restriction(google::protobuf::int64 id, google::protobuf::int64 from,
+              google::protobuf::int64 via, google::protobuf::int64 to,
+              std::string type)
+      : parser::Relation(id, from, via, to), type(type) {}
 
   std::string type;
 };

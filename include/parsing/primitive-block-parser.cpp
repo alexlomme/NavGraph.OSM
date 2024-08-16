@@ -139,8 +139,8 @@ void parser::primitive_block::parse(
 
       total++;
 
-      restrictionBuffer.push_back(
-          parser::Restriction{from, via, to, restrictionType});
+      restrictionBuffer.push_back(parser::Restriction{
+          parsedRelation.id(), from, via, to, restrictionType});
     }
 
     for (auto& parsedNode : group.nodes()) {

@@ -104,9 +104,48 @@ int main(int argc, char* argv[]) {
   std::cerr << "Ways: " << ways.size() << std::endl;
   std::cerr << "Restrictions: " << restrictions.size() << std::endl;
 
+  // hash restrictions by to
+  std::unordered_multimap<google::protobuf::int64, parser::Restriction*>
+      toOnlyRestrictionsMap;
+
+  std::unordered_map<
+      std::tuple<google::protobuf::int64, google::protobuf::int64,
+                 google::protobuf::int64>,
+      parser::Restriction*>
+      forbidRestrictionsMap;
+  for (auto& restriction : restrictions) {
+    auto& type = restriction.type;
+    if (type != "only_right_turn" && type != "only_left_turn" &&
+        type != "only_straight_on") {
+      if (type == "no_right_turn" || type == "no_left_turn" ||
+          type == "no_straight_on") {
+        forbidRestrictionsMap.insert(std::make_pair(
+            std::make_tuple(restriction.from, restriction.via, restriction.to),
+            &restriction));
+      }
+      continue;
+    }
+    toOnlyRestrictionsMap.insert(std::make_pair(restriction.to, &restriction));
+  }
+
+  std::unordered_multimap<
+      std::tuple<google::protobuf::int64, google::protobuf::int64>,
+      parser::Restriction*>
+      mandatoryRestrictionsMap;
   ska::flat_hash_map<google::protobuf::int64, uint64_t> usedNodes;
 
   for (auto& way : ways) {
+    auto restRange = toOnlyRestrictionsMap.equal_range(way.id);
+    if (restRange.first != restRange.second) {
+      std::for_each(
+          restRange.first, restRange.second, [&](auto restrictionPair) {
+            mandatoryRestrictionsMap.insert(
+                std::make_pair(std::make_tuple(restrictionPair.second->from,
+                                               restrictionPair.second->via),
+                               restrictionPair.second));
+          });
+    }
+
     for (uint64_t i = 0; i < way.nodes.size(); i++) {
       auto pairIt = usedNodes.find(way.nodes[i]);
 
@@ -142,76 +181,16 @@ int main(int argc, char* argv[]) {
   std::unordered_map<google::protobuf::int64, parser::ExpandedEdge>
       expEdgesBuffer;
 
-  auto edgStart = std::chrono::high_resolution_clock::now();
-
   parser::waysToEdges(ways, nodesHashMap, edgesBuffer);
 
   std::cerr << "Edges: " << edgesBuffer.size() << std::endl;
 
   parser::graph::Graph graph(edgesBuffer);
 
-  std::unordered_multimap<
-      std::tuple<google::protobuf::int64, google::protobuf::int64>,
-      parser::Restriction*>
-      mandatoryRestrictionsMap;
-
-  std::unordered_map<
-      std::tuple<google::protobuf::int64, google::protobuf::int64,
-                 google::protobuf::int64>,
-      parser::Restriction*>
-      forbidRestrictionsMap;
-
-  for (auto& restriction : restrictions) {
-    auto vertIt = graph.find(restriction.via);
-    if (vertIt == graph.end()) {
-      continue;
-    }
-
-    auto toIt = std::find_if(ways.begin(), ways.end(), [&](auto& way) {
-      return way.id == restriction.to;
-    });
-    // if (toIt != vertIt->second.end()) {
-    if (toIt != ways.end()) {
-      if (restriction.type == "only_right_turn" ||
-          restriction.type == "only_left_turn" ||
-          restriction.type == "only_straight_on") {
-        mandatoryRestrictionsMap.insert(std::make_pair(
-            std::make_tuple(restriction.from, restriction.via), &restriction));
-      } else if (restriction.type == "no_right_turn" ||
-                 restriction.type == "no_left_turn" ||
-                 restriction.type == "no_straight_on") {
-        forbidRestrictionsMap.insert(std::make_pair(
-            std::make_tuple(restriction.from, restriction.via, restriction.to),
-            &restriction));
-      }
-    }
-  }
-
-  // std::unordered_map<
-  //     std::tuple<google::protobuf::int64, google::protobuf::int64>, uint64_t>
-  //     restCountMap;
-
-  // for (auto& rest : mandatoryRestrictionsMap) {
-  //   auto restCountIt = restCountMap.find(rest.first);
-  //   if (restCountIt != restCountMap.end()) {
-  //     restCountIt->second++;
-  //   } else {
-  //     restCountMap.insert(std::make_pair(rest.first, 1));
-  //   }
-  // }
-
-  // for (auto& [key, count] : restCountMap) {
-  //   if (count > 1) {
-  //     std::cerr << "count > 1" << std::endl;
-  //   }
-  // }
-
   graph.invert(edgesBuffer, mandatoryRestrictionsMap, forbidRestrictionsMap,
                expEdgesBuffer);
 
   std::cerr << "Expanded edges: " << expEdgesBuffer.size() << std::endl;
-  std::cerr << "Mandatory: " << mandatoryRestrictionsMap.size() << std::endl;
-  std::cerr << "Other: " << forbidRestrictionsMap.size() << std::endl;
 
   auto end = std::chrono::high_resolution_clock::now();
   auto duration =

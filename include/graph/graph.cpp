@@ -31,8 +31,6 @@ void parser::graph::Graph::invert(
         expEdgesBuffer) {
   google::protobuf::int64 expandedEdgeId = 0;
 
-  uint64_t mandRests = 0;
-
   for (auto sourceEdgePair : edges) {
     auto viaNodeId = sourceEdgePair.second.targetNodePtr->id;
     auto graphNodePairIt = vertEdgeMap.find(viaNodeId);
@@ -46,8 +44,6 @@ void parser::graph::Graph::invert(
 
     auto numMandRests =
         std::distance(mandRestRange.first, mandRestRange.second);
-
-    mandRests += numMandRests;
 
     if (numMandRests > 1) {
       auto to = mandRestRange.first->second->to;
@@ -104,7 +100,6 @@ void parser::graph::Graph::invert(
 
         continue;
       } else {
-        std::cerr << "AAAA" << std::endl;
         continue;
       }
     }
@@ -152,8 +147,6 @@ void parser::graph::Graph::invert(
       expandedEdgeId++;
     }
   }
-
-  std::cerr << mandRests << std::endl;
 }
 
 std::unordered_map<google::protobuf::int64,
