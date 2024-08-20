@@ -15,9 +15,9 @@ namespace parser {
 namespace graph {
 struct Graph {
  public:
-  Graph(std::unordered_map<google::protobuf::int64, parser::Edge>& edges);
+  Graph(std::vector<parser::Edge>& edges);
 
-  void invert(std::unordered_map<google::protobuf::int64, parser::Edge>& edges,
+  void invert(std::vector<parser::Edge>& edges,
               std::unordered_multimap<
                   std::tuple<google::protobuf::int64, google::protobuf::int64>,
                   parser::Restriction*>& mandatoryRestrictions,
@@ -25,8 +25,7 @@ struct Graph {
                   std::tuple<google::protobuf::int64, google::protobuf::int64,
                              google::protobuf::int64>,
                   parser::Restriction*>& forbidRestrictions,
-              std::unordered_map<google::protobuf::int64, parser::ExpandedEdge>&
-                  expEdgesBuffer);
+              std::vector<parser::ExpandedEdge>& expEdgesBuffer);
 
   std::unordered_map<google::protobuf::int64,
                      std::vector<parser::Edge*>>::iterator

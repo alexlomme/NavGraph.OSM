@@ -3,23 +3,21 @@
 #include <types/expanded-edge.hpp>
 #include <unordered_set>
 
-parser::graph::Graph::Graph(
-    std::unordered_map<google::protobuf::int64, parser::Edge>& edges) {
-  for (auto& edgePair : edges) {
-    auto entryIt = vertEdgeMap.find(edgePair.second.sourceNodePtr->id);
+parser::graph::Graph::Graph(std::vector<parser::Edge>& edges) {
+  for (auto& edge : edges) {
+    auto entryIt = vertEdgeMap.find(edge.sourceNodePtr->id);
     if (entryIt == vertEdgeMap.end()) {
       std::vector<parser::Edge*> verts;
-      verts.push_back(&edgePair.second);
-      vertEdgeMap.insert(
-          std::make_pair(edgePair.second.sourceNodePtr->id, verts));
+      verts.push_back(&edge);
+      vertEdgeMap.insert(std::make_pair(edge.sourceNodePtr->id, verts));
     } else {
-      entryIt->second.push_back(&edgePair.second);
+      entryIt->second.push_back(&edge);
     }
   }
 }
 
 void parser::graph::Graph::invert(
-    std::unordered_map<google::protobuf::int64, parser::Edge>& edges,
+    std::vector<parser::Edge>& edges,
     std::unordered_multimap<
         std::tuple<google::protobuf::int64, google::protobuf::int64>,
         parser::Restriction*>& mandatoryRestrictions,
@@ -27,12 +25,11 @@ void parser::graph::Graph::invert(
         std::tuple<google::protobuf::int64, google::protobuf::int64,
                    google::protobuf::int64>,
         parser::Restriction*>& forbidRestrictions,
-    std::unordered_map<google::protobuf::int64, parser::ExpandedEdge>&
-        expEdgesBuffer) {
+    std::vector<parser::ExpandedEdge>& expEdgesBuffer) {
   google::protobuf::int64 expandedEdgeId = 0;
 
-  for (auto sourceEdgePair : edges) {
-    auto viaNodeId = sourceEdgePair.second.targetNodePtr->id;
+  for (auto sourceEdge : edges) {
+    auto viaNodeId = sourceEdge.targetNodePtr->id;
     auto graphNodePairIt = vertEdgeMap.find(viaNodeId);
 
     if (graphNodePairIt == vertEdgeMap.end()) {
@@ -40,7 +37,7 @@ void parser::graph::Graph::invert(
     }
 
     auto mandRestRange = mandatoryRestrictions.equal_range(
-        std::make_pair(sourceEdgePair.second.wayPtr->id, viaNodeId));
+        std::make_pair(sourceEdge.wayPtr->id, viaNodeId));
 
     auto numMandRests =
         std::distance(mandRestRange.first, mandRestRange.second);
@@ -71,8 +68,8 @@ void parser::graph::Graph::invert(
           });
 
       if (targetEdgePtrIt != graphNodePairIt->second.end()) {
-        auto sourceEdgeSourceNodePtr = sourceEdgePair.second.sourceNodePtr;
-        auto sourceEdgeTargetNodePtr = sourceEdgePair.second.targetNodePtr;
+        auto sourceEdgeSourceNodePtr = sourceEdge.sourceNodePtr;
+        auto sourceEdgeTargetNodePtr = sourceEdge.targetNodePtr;
         auto targetEdgeSourceNodePtr = (*targetEdgePtrIt)->sourceNodePtr;
         auto targetEdgeTargetNodePtr = (*targetEdgePtrIt)->targetNodePtr;
 
@@ -82,20 +79,17 @@ void parser::graph::Graph::invert(
             sourceEdgeTargetNodePtr->lon == targetEdgeSourceNodePtr->lon) {
           continue;
         }
-        auto forbidRestPairIt = forbidRestrictions.find(
-            std::make_tuple(sourceEdgePair.second.wayPtr->id, viaNodeId,
-                            (*targetEdgePtrIt)->wayPtr->id));
+        auto forbidRestPairIt = forbidRestrictions.find(std::make_tuple(
+            sourceEdge.wayPtr->id, viaNodeId, (*targetEdgePtrIt)->wayPtr->id));
         if (forbidRestPairIt != forbidRestrictions.end()) {
           continue;
         }
-        expEdgesBuffer.insert(std::make_pair(
-            expandedEdgeId,
-            parser::ExpandedEdge{
-                expandedEdgeId, sourceEdgePair.first, (*targetEdgePtrIt)->id,
-                (sourceEdgePair.second.cost + (*targetEdgePtrIt)->cost) / 2}));
+        expEdgesBuffer.push_back(parser::ExpandedEdge{
+            expandedEdgeId, sourceEdge.id, (*targetEdgePtrIt)->id,
+            (sourceEdge.cost + (*targetEdgePtrIt)->cost) / 2});
         std::vector<google::protobuf::int64> vec;
         vec.push_back(expandedEdgeId);
-        invVertEdgeMap.insert(std::make_pair(sourceEdgePair.first, vec));
+        invVertEdgeMap.insert(std::make_pair(sourceEdge.id, vec));
         expandedEdgeId++;
 
         continue;
@@ -105,14 +99,14 @@ void parser::graph::Graph::invert(
     }
 
     for (auto targetEdgePtr : graphNodePairIt->second) {
-      if (targetEdgePtr->id == sourceEdgePair.first) {
+      if (targetEdgePtr->id == sourceEdge.id) {
         continue;
       }
 
       auto targetEdge = *targetEdgePtr;
 
-      auto sourceEdgeSourceNodePtr = sourceEdgePair.second.sourceNodePtr;
-      auto sourceEdgeTargetNodePtr = sourceEdgePair.second.targetNodePtr;
+      auto sourceEdgeSourceNodePtr = sourceEdge.sourceNodePtr;
+      auto sourceEdgeTargetNodePtr = sourceEdge.targetNodePtr;
       auto targetEdgeSourceNodePtr = targetEdge.sourceNodePtr;
       auto targetEdgeTargetNodePtr = targetEdge.targetNodePtr;
 
@@ -124,23 +118,21 @@ void parser::graph::Graph::invert(
       }
 
       auto restrictionPairIt = forbidRestrictions.find(std::make_tuple(
-          sourceEdgePair.second.wayPtr->id, viaNodeId, targetEdge.wayPtr->id));
+          sourceEdge.wayPtr->id, viaNodeId, targetEdge.wayPtr->id));
 
       if (restrictionPairIt != forbidRestrictions.end()) {
         continue;
       }
 
-      expEdgesBuffer.insert(std::make_pair(
-          expandedEdgeId,
-          parser::ExpandedEdge{
-              expandedEdgeId, sourceEdgePair.first, targetEdge.id,
-              (sourceEdgePair.second.cost + targetEdge.cost) / 2}));
-      auto invertedGraphSourceIt = invVertEdgeMap.find(sourceEdgePair.first);
+      expEdgesBuffer.push_back(
+          parser::ExpandedEdge{expandedEdgeId, sourceEdge.id, targetEdge.id,
+                               (sourceEdge.cost + targetEdge.cost) / 2});
+      auto invertedGraphSourceIt = invVertEdgeMap.find(sourceEdge.id);
 
       if (invertedGraphSourceIt == invVertEdgeMap.end()) {
         std::vector<google::protobuf::int64> vec;
         vec.push_back(expandedEdgeId);
-        invVertEdgeMap.insert(std::make_pair(sourceEdgePair.first, vec));
+        invVertEdgeMap.insert(std::make_pair(sourceEdge.id, vec));
       } else {
         invertedGraphSourceIt->second.push_back(expandedEdgeId);
       }

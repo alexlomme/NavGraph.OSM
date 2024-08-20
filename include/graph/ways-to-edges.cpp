@@ -5,7 +5,7 @@
 void parser::waysToEdges(
     std::vector<parser::Way>& ways,
     std::unordered_map<google::protobuf::int64, parser::Node*>& nodes,
-    std::unordered_map<google::protobuf::int64, parser::Edge>& edgesBuf) {
+    std::vector<parser::Edge>& edgesBuf) {
   google::protobuf::int64 edgeId = 0;
 
   for (auto& way : ways) {
@@ -39,13 +39,13 @@ void parser::waysToEdges(
         continue;
       }
 
-      edgesBuf.insert(
-          {edgeId, parser::Edge{edgeId, &way, sourceNodePtr, nodePtr, cost}});
+      edgesBuf.push_back(
+          parser::Edge{edgeId, &way, sourceNodePtr, nodePtr, cost});
       edgeId++;
 
       if (!way.oneway) {
-        edgesBuf.insert(
-            {edgeId, parser::Edge{edgeId, &way, nodePtr, sourceNodePtr, cost}});
+        edgesBuf.push_back(
+            parser::Edge{edgeId, &way, nodePtr, sourceNodePtr, cost});
       }
 
       sourceNodePtr = nodePtr;

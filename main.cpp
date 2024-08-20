@@ -6,6 +6,7 @@
 #include <graph/graph.hpp>
 #include <graph/ways-to-edges.hpp>
 #include <parsing/primitive-block-parser.hpp>
+#include <processing.hpp>
 #include <sstream>
 #include <tables/ska/flat_hash_map.hpp>
 #include <types/edge.hpp>
@@ -113,20 +114,24 @@ int main(int argc, char* argv[]) {
                  google::protobuf::int64>,
       parser::Restriction*>
       forbidRestrictionsMap;
-  for (auto& restriction : restrictions) {
-    auto& type = restriction.type;
-    if (type != "only_right_turn" && type != "only_left_turn" &&
-        type != "only_straight_on") {
-      if (type == "no_right_turn" || type == "no_left_turn" ||
-          type == "no_straight_on") {
-        forbidRestrictionsMap.insert(std::make_pair(
-            std::make_tuple(restriction.from, restriction.via, restriction.to),
-            &restriction));
-      }
-      continue;
-    }
-    toOnlyRestrictionsMap.insert(std::make_pair(restriction.to, &restriction));
-  }
+  // for (auto& restriction : restrictions) {
+  //   auto& type = restriction.type;
+  //   if (type != "only_right_turn" && type != "only_left_turn" &&
+  //       type != "only_straight_on") {
+  //     if (type == "no_right_turn" || type == "no_left_turn" ||
+  //         type == "no_straight_on") {
+  //       forbidRestrictionsMap.insert(std::make_pair(
+  //           std::make_tuple(restriction.from, restriction.via,
+  //           restriction.to), &restriction));
+  //     }
+  //     continue;
+  //   }
+  //   toOnlyRestrictionsMap.insert(std::make_pair(restriction.to,
+  //   &restriction));
+  // }
+
+  parser::processing::hash_restrictions(restrictions, toOnlyRestrictionsMap,
+                                        forbidRestrictionsMap);
 
   std::unordered_multimap<
       std::tuple<google::protobuf::int64, google::protobuf::int64>,
@@ -134,52 +139,56 @@ int main(int argc, char* argv[]) {
       mandatoryRestrictionsMap;
   ska::flat_hash_map<google::protobuf::int64, uint64_t> usedNodes;
 
-  for (auto& way : ways) {
-    auto restRange = toOnlyRestrictionsMap.equal_range(way.id);
-    if (restRange.first != restRange.second) {
-      std::for_each(
-          restRange.first, restRange.second, [&](auto restrictionPair) {
-            mandatoryRestrictionsMap.insert(
-                std::make_pair(std::make_tuple(restrictionPair.second->from,
-                                               restrictionPair.second->via),
-                               restrictionPair.second));
-          });
-    }
+  // for (auto& way : ways) {
+  //   auto restRange = toOnlyRestrictionsMap.equal_range(way.id);
+  //   if (restRange.first != restRange.second) {
+  //     std::for_each(
+  //         restRange.first, restRange.second, [&](auto restrictionPair) {
+  //           mandatoryRestrictionsMap.insert(
+  //               std::make_pair(std::make_tuple(restrictionPair.second->from,
+  //                                              restrictionPair.second->via),
+  //                              restrictionPair.second));
+  //         });
+  //   }
 
-    for (uint64_t i = 0; i < way.nodes.size(); i++) {
-      auto pairIt = usedNodes.find(way.nodes[i]);
+  //   for (uint64_t i = 0; i < way.nodes.size(); i++) {
+  //     auto pairIt = usedNodes.find(way.nodes[i]);
 
-      if (pairIt == usedNodes.end()) {
-        if (i == 0 || i == way.nodes.size() - 1) {
-          usedNodes.insert(std::make_pair(way.nodes[i], 2));
-        } else {
-          usedNodes.insert(std::make_pair(way.nodes[i], 1));
-        }
-      } else {
-        if (i == 0 || i == way.nodes.size() - 1) {
-          pairIt->second += 2;
-        } else {
-          pairIt->second++;
-        }
-      }
-    }
-  }
+  //     if (pairIt == usedNodes.end()) {
+  //       if (i == 0 || i == way.nodes.size() - 1) {
+  //         usedNodes.insert(std::make_pair(way.nodes[i], 2));
+  //       } else {
+  //         usedNodes.insert(std::make_pair(way.nodes[i], 1));
+  //       }
+  //     } else {
+  //       if (i == 0 || i == way.nodes.size() - 1) {
+  //         pairIt->second += 2;
+  //       } else {
+  //         pairIt->second++;
+  //       }
+  //     }
+  //   }
+  // }
+
+  parser::processing::process_ways(ways, usedNodes, toOnlyRestrictionsMap,
+                                   mandatoryRestrictionsMap);
 
   std::unordered_map<google::protobuf::int64, parser::Node*> nodesHashMap;
 
-  for (auto& node : nodes) {
-    auto pairIt = usedNodes.find(node.id);
-    if (pairIt == usedNodes.end()) {
-      continue;
-    }
-    node.used = pairIt->second;
-    nodesHashMap.insert(std::make_pair(node.id, &node));
-  }
+  // for (auto& node : nodes) {
+  //   auto pairIt = usedNodes.find(node.id);
+  //   if (pairIt == usedNodes.end()) {
+  //     continue;
+  //   }
+  //   node.used = pairIt->second;
+  //   nodesHashMap.insert(std::make_pair(node.id, &node));
+  // }
 
-  std::unordered_map<google::protobuf::int64, parser::Edge> edgesBuffer;
+  parser::processing::hash_nodes(nodes, usedNodes, nodesHashMap);
 
-  std::unordered_map<google::protobuf::int64, parser::ExpandedEdge>
-      expEdgesBuffer;
+  std::vector<parser::Edge> edgesBuffer;
+
+  std::vector<parser::ExpandedEdge> expEdgesBuffer;
 
   parser::waysToEdges(ways, nodesHashMap, edgesBuffer);
 

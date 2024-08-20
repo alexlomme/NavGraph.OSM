@@ -15,5 +15,5 @@ namespace parser {
 void waysToEdges(
     std::vector<parser::Way>& ways,
     std::unordered_map<google::protobuf::int64, parser::Node*>& nodes,
-    std::unordered_map<google::protobuf::int64, parser::Edge>& edgesBuf);
+    std::vector<parser::Edge>& edgesBuf);
 }  // namespace parser

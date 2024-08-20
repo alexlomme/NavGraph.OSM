@@ -52,6 +52,8 @@ void parser::primitive_block::parse(
 
       std::vector<google::protobuf::int64> nodeRefs;
 
+      nodeRefs.reserve(parsedWay.refs_size());
+
       google::protobuf::int64 prevValue = 0;
 
       for (auto& nodeRef : parsedWay.refs()) {
