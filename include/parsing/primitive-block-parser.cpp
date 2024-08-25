@@ -51,7 +51,6 @@ void parser::primitive_block::parse(
       }
 
       std::vector<google::protobuf::int64> nodeRefs;
-
       nodeRefs.reserve(parsedWay.refs_size());
 
       google::protobuf::int64 prevValue = 0;
@@ -70,26 +69,11 @@ void parser::primitive_block::parse(
       auto& keys = parsedRelation.keys();
       auto& values = parsedRelation.vals();
 
-      std::vector<uint64_t> range(keys.size());
-      std::iota(range.begin(), range.end(), 0);
-
-      auto it = std::find_if(range.begin(), range.end(), [&](uint64_t index) {
-        return stringTable.s(keys[index]) == "type";
-      });
-      if (it == range.end()) {
-        // std::cerr << "Relation doesn't have a \"type\" key" << std::endl;
-      }
-
-      // if (stringTable.s(values[*it]) != "restriction") {
-      //   continue;
-      // }
-
       auto restIt = std::find_if(keys.begin(), keys.end(), [&](uint32_t key) {
         return stringTable.s(key) == "restriction";
       });
 
       if (restIt == keys.end()) {
-        // std::cerr << "Restriction type no specified" << std::endl;
         continue;
       }
 
@@ -101,7 +85,6 @@ void parser::primitive_block::parse(
       auto& types = parsedRelation.types();
 
       if (parsedRelation.memids_size() != 3) {
-        // std::cerr << "Too much members" << std::endl;
         continue;
       }
 
@@ -127,15 +110,12 @@ void parser::primitive_block::parse(
                    type ==
                        OSMPBF::Relation::MemberType::Relation_MemberType_NODE) {
           via = id;
-        } else {
-          // std::cerr << role << " " << type << restrictionType << std::endl;
         }
 
         prevId = id;
       }
 
       if (from == -1 || to == -1 || via == -1) {
-        // std::cerr << "Invalid restriction" << std::endl;
         continue;
       }
 
@@ -151,7 +131,7 @@ void parser::primitive_block::parse(
       auto lon = convertCoord(block.lon_offset(), block.granularity(),
                               parsedNode.lon());
 
-      nodeBuffer.push_back(parser::Node{parsedNode.id(), lat, lon, 0});
+      nodeBuffer.emplace_back(parsedNode.id(), lat, lon, 0);
     }
 
     auto& denseNodes = group.dense();
@@ -179,7 +159,7 @@ void parser::primitive_block::parse(
       auto lon =
           convertCoord(block.lon_offset(), block.granularity(), lonCoord);
 
-      nodeBuffer.push_back(Node{id, lat, lon, 0});
+      nodeBuffer.emplace_back(id, lat, lon, 0);
 
       prevId = id;
       prevLat = latCoord;
