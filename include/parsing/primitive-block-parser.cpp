@@ -1,8 +1,6 @@
 
 #include "primitive-block-parser.hpp"
 
-#include <chrono>
-
 std::unordered_set<std::string> highwayTypes{
     "motorway",      "primary",        "primary_link", "road",
     "secondary",     "secondary_link", "residential",  "tertiary",

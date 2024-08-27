@@ -6,7 +6,7 @@ ABSL_CFLAGS := $(shell $(PKG_CONFIG) --cflags absl)
 ABSL_LIBS := $(shell $(PKG_CONFIG) --libs absl)
 
 INCLUDE_FLAGS	   := -Iinclude -I/opt/homebrew/include -L/opt/homebrew/lib
-CXXFLAGS		   := -Wall -std=c++20 $(INCLUDE_FLAGS) -g -lz -ldeflate -lprotobuf -O3 \
+CXXFLAGS		   := -Wall -std=c++20 $(INCLUDE_FLAGS) -g -lz -ldeflate -lprotobuf -O3 -lchealpix -lgsl \
     -labsl_log_internal_check_op \
     -labsl_log_internal_conditions \
     -labsl_log_internal_fnmatch \
