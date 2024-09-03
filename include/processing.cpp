@@ -13,8 +13,7 @@ void hash_restrictions(restriction_buffer_t& buffer,
       if (type == "no_right_turn" || type == "no_left_turn" ||
           type == "no_straight_on") {
         noRestrictionsMap.insert(std::make_pair(
-            std::make_tuple(restriction.from, restriction.via, restriction.to),
-            &restriction));
+            std::make_tuple(restriction.from, restriction.to), &restriction));
       }
       continue;
     }

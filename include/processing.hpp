@@ -21,8 +21,7 @@ template <typename K, typename V>
 using hashtable = std::unordered_map<K, V>;
 
 using no_restriction_map_t =
-    hashtable<std::tuple<google::protobuf::int64, google::protobuf::int64,
-                         google::protobuf::int64>,
+    hashtable<std::tuple<google::protobuf::int64, google::protobuf::int64>,
               parser::Restriction*>;
 using node_map = hashtable<google::protobuf::int64, parser::Node*>;
 

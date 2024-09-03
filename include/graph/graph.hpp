@@ -22,8 +22,7 @@ struct Graph {
                   std::tuple<google::protobuf::int64, google::protobuf::int64>,
                   parser::Restriction*>& mandatoryRestrictions,
               std::unordered_map<
-                  std::tuple<google::protobuf::int64, google::protobuf::int64,
-                             google::protobuf::int64>,
+                  std::tuple<google::protobuf::int64, google::protobuf::int64>,
                   parser::Restriction*>& forbidRestrictions,
               std::vector<parser::ExpandedEdge>& expEdgesBuffer);
 
@@ -34,6 +33,9 @@ struct Graph {
   std::unordered_map<google::protobuf::int64,
                      std::vector<parser::Edge*>>::iterator
   end();
+
+  std::unordered_map<google::protobuf::int64, std::vector<parser::Edge*>>&
+  graph();
 
  private:
   std::unordered_map<google::protobuf::int64, std::vector<parser::Edge*>>

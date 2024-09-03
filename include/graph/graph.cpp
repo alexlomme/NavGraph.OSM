@@ -22,8 +22,7 @@ void parser::graph::Graph::invert(
         std::tuple<google::protobuf::int64, google::protobuf::int64>,
         parser::Restriction*>& mandatoryRestrictions,
     std::unordered_map<
-        std::tuple<google::protobuf::int64, google::protobuf::int64,
-                   google::protobuf::int64>,
+        std::tuple<google::protobuf::int64, google::protobuf::int64>,
         parser::Restriction*>& forbidRestrictions,
     std::vector<parser::ExpandedEdge>& expEdgesBuffer) {
   google::protobuf::int64 expandedEdgeId = 0;
@@ -80,12 +79,14 @@ void parser::graph::Graph::invert(
           continue;
         }
         auto forbidRestPairIt = forbidRestrictions.find(std::make_tuple(
-            sourceEdge.wayPtr->id, viaNodeId, (*targetEdgePtrIt)->wayPtr->id));
+            sourceEdge.wayPtr->id, (*targetEdgePtrIt)->wayPtr->id));
         if (forbidRestPairIt != forbidRestrictions.end()) {
           continue;
         }
         expEdgesBuffer.push_back(parser::ExpandedEdge{
-            expandedEdgeId, sourceEdge.id, (*targetEdgePtrIt)->id,
+            expandedEdgeId, sourceEdge.sourceNodePtr, sourceEdge.targetNodePtr,
+            (*targetEdgePtrIt)->sourceNodePtr,
+            (*targetEdgePtrIt)->targetNodePtr,
             (sourceEdge.cost + (*targetEdgePtrIt)->cost) / 2});
         std::vector<google::protobuf::int64> vec;
         vec.push_back(expandedEdgeId);
@@ -117,16 +118,17 @@ void parser::graph::Graph::invert(
         continue;
       }
 
-      auto restrictionPairIt = forbidRestrictions.find(std::make_tuple(
-          sourceEdge.wayPtr->id, viaNodeId, targetEdge.wayPtr->id));
+      auto restrictionPairIt = forbidRestrictions.find(
+          std::make_tuple(sourceEdge.wayPtr->id, targetEdge.wayPtr->id));
 
       if (restrictionPairIt != forbidRestrictions.end()) {
         continue;
       }
 
-      expEdgesBuffer.push_back(
-          parser::ExpandedEdge{expandedEdgeId, sourceEdge.id, targetEdge.id,
-                               (sourceEdge.cost + targetEdge.cost) / 2});
+      expEdgesBuffer.push_back(parser::ExpandedEdge{
+          expandedEdgeId, sourceEdge.sourceNodePtr, sourceEdge.targetNodePtr,
+          targetEdge.sourceNodePtr, targetEdge.targetNodePtr,
+          (sourceEdge.cost + targetEdge.cost) / 2});
       auto invertedGraphSourceIt = invVertEdgeMap.find(sourceEdge.id);
 
       if (invertedGraphSourceIt == invVertEdgeMap.end()) {
@@ -151,4 +153,9 @@ std::unordered_map<google::protobuf::int64,
                    std::vector<parser::Edge*>>::iterator
 parser::graph::Graph::end() {
   return vertEdgeMap.end();
+}
+
+std::unordered_map<google::protobuf::int64, std::vector<parser::Edge*>>&
+parser::graph::Graph::graph() {
+  return vertEdgeMap;
 }

@@ -20,8 +20,11 @@ void parser::waysToEdges(
 
     double cost = 0;
 
+    auto prevValue = way.nodes[0];
+
     for (uint64_t i = 1; i < wayNodes.size(); i++) {
-      auto nodeId = wayNodes[i];
+      prevValue += wayNodes[i];
+      auto nodeId = prevValue;
       auto nodePairIt = nodes.find(nodeId);
 
       if (nodePairIt == nodes.end()) {
@@ -41,9 +44,9 @@ void parser::waysToEdges(
 
       edgesBuf.push_back(
           parser::Edge{edgeId, &way, sourceNodePtr, nodePtr, cost});
-      edgeId++;
 
       if (!way.oneway) {
+        edgeId++;
         edgesBuf.push_back(
             parser::Edge{edgeId, &way, nodePtr, sourceNodePtr, cost});
       }

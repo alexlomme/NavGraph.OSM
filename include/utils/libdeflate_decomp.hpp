@@ -5,7 +5,8 @@
 #include <iostream>
 #include <string>
 
-bool ldeflate_decompress(std::string data, unsigned char* buf, size_t rawSize) {
+inline bool ldeflate_decompress(std::string data, unsigned char* buf,
+                                size_t rawSize) {
   libdeflate_decompressor* decompressor = libdeflate_alloc_decompressor();
 
   size_t actual_decompressed_size;

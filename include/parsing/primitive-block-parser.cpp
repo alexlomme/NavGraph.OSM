@@ -58,7 +58,7 @@ void parser::primitive_block::parse(
         prevValue += nodeRef;
       }
 
-      wayBuffer.push_back(parser::Way{parsedWay.id(), nodeRefs, oneway});
+      // wayBuffer.push_back(parser::Way{parsedWay.id(), nodeRefs, oneway});
     }
 
     uint64_t total = 0;
