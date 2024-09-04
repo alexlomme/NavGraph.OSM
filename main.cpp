@@ -17,6 +17,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <tables/ska/flat_hash_map.hpp>
+#include <types/border-edge.hpp>
 #include <types/border-way.hpp>
 #include <types/edge.hpp>
 #include <types/expanded-edge.hpp>
@@ -25,24 +26,6 @@
 #include <types/used-node.hpp>
 #include <types/way.hpp>
 #include <utils/hashing.hpp>
-#include <utils/libdeflate_decomp.hpp>
-
-struct BorderEdge {
-  google::protobuf::int64 id;
-  parser::BorderWay* wayPtr;
-  parser::Node* sourceNodePtr;
-  parser::Node* targetNodePtr;
-  double cost;
-
-  BorderEdge(google::protobuf::int64 id, parser::BorderWay* wayPtr,
-             parser::Node* sourceNodePtr, parser::Node* targetNodePtr,
-             double cost)
-      : id(id),
-        wayPtr(wayPtr),
-        sourceNodePtr(sourceNodePtr),
-        targetNodePtr(targetNodePtr),
-        cost(cost) {}
-};
 
 int main(int argc, char* argv[]) {
   GOOGLE_PROTOBUF_VERIFY_VERSION;
@@ -226,7 +209,7 @@ int main(int argc, char* argv[]) {
     sum += buf.size();
   }
 
-  std::vector<BorderEdge> borderEdges;
+  std::vector<parser::BorderEdge> borderEdges;
   borderEdges.reserve(borderWays.size());
   google::protobuf::int64 edgeId = 0;
 
@@ -292,7 +275,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  std::unordered_map<google::protobuf::int64, std::vector<BorderEdge*>>
+  std::unordered_map<google::protobuf::int64, std::vector<parser::BorderEdge*>>
       borderGraph;
 
   for (auto& edge : borderEdges) {
