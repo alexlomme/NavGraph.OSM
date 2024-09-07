@@ -18,6 +18,13 @@ struct Way {
     nodes = std::vector<google::protobuf::int64>(begin, end);
   }
 
+  Way(google::protobuf::int64 id, bool oneway,
+      std::vector<google::protobuf::int64>::iterator begin,
+      std::vector<google::protobuf::int64>::iterator end)
+      : id(id), oneway(oneway) {
+    nodes = std::vector<google::protobuf::int64>(begin, end);
+  }
+
   google::protobuf::int64 id;
   std::vector<google::protobuf::int64> nodes;
   bool oneway;

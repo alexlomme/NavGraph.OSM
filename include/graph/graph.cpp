@@ -88,9 +88,6 @@ void parser::graph::Graph::invert(
             (*targetEdgePtrIt)->sourceNodePtr,
             (*targetEdgePtrIt)->targetNodePtr,
             (sourceEdge.cost + (*targetEdgePtrIt)->cost) / 2});
-        std::vector<google::protobuf::int64> vec;
-        vec.push_back(expandedEdgeId);
-        invVertEdgeMap.insert(std::make_pair(sourceEdge.id, vec));
         expandedEdgeId++;
 
         continue;
@@ -129,15 +126,6 @@ void parser::graph::Graph::invert(
           expandedEdgeId, sourceEdge.sourceNodePtr, sourceEdge.targetNodePtr,
           targetEdge.sourceNodePtr, targetEdge.targetNodePtr,
           (sourceEdge.cost + targetEdge.cost) / 2});
-      auto invertedGraphSourceIt = invVertEdgeMap.find(sourceEdge.id);
-
-      if (invertedGraphSourceIt == invVertEdgeMap.end()) {
-        std::vector<google::protobuf::int64> vec;
-        vec.push_back(expandedEdgeId);
-        invVertEdgeMap.insert(std::make_pair(sourceEdge.id, vec));
-      } else {
-        invertedGraphSourceIt->second.push_back(expandedEdgeId);
-      }
       expandedEdgeId++;
     }
   }
