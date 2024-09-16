@@ -1,6 +1,7 @@
 #include <chealpix.h>
 #include <osmpbf/fileformat.pb.h>
 
+#include <iostream>
 #include <parsing/parsing-functions.hpp>
 #include <types/way.hpp>
 #include <utils/libdeflate_decomp.hpp>
@@ -71,6 +72,20 @@ void parser::parsing::parseUsedNodes(
         if (parser::supportedHighwayTypes.find(highwayType) ==
             parser::supportedHighwayTypes.end()) {
           continue;
+        }
+
+        auto owIt = std::find_if(keys.begin(), keys.end(), [&](uint32_t key) {
+          return stringtable.s(key) == "oneway";
+        });
+
+        bool oneway = false;
+        if (owIt != keys.end()) {
+          uint64_t index = std::distance(keys.begin(), owIt);
+          auto onewayVal = stringtable.s(values[index]);
+
+          if (onewayVal == "yes" || onewayVal == "1") {
+            oneway = true;
+          }
         }
 
         google::protobuf::int64 prevValue = 0;

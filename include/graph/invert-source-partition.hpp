@@ -10,10 +10,10 @@ namespace graph {
 namespace invert {
 
 template <typename E, typename EE>
-void applyRestrictions(
+void applyRestrictionsSourcePartition(
     E* sourceEdge,
     std::unordered_map<google::protobuf::int64, std::vector<EE*>>& graph,
-    parser::Node* nodes,
+    parser::Node* nodes, parser::Node* borderNodes,
     std::unordered_multimap<
         std::tuple<google::protobuf::int64, google::protobuf::int64>,
         parser::Restriction*>& onlyRestrictionsHash,
@@ -63,9 +63,9 @@ void applyRestrictions(
       auto sourceEdgeSourceNodePtr = nodes + sourceEdge->sourceNodeOffset;
       auto sourceEdgeTargetNodePtr = nodes + sourceEdge->targetNodeOffset;
       auto targetEdgeSourceNodePtr =
-          nodes + (*targetEdgePtrIt)->sourceNodeOffset;
+          borderNodes + (*targetEdgePtrIt)->sourceNodeOffset;
       auto targetEdgeTargetNodePtr =
-          nodes + (*targetEdgePtrIt)->targetNodeOffset;
+          borderNodes + (*targetEdgePtrIt)->targetNodeOffset;
 
       if (sourceEdgeSourceNodePtr->lat == targetEdgeTargetNodePtr->lat &&
           sourceEdgeSourceNodePtr->lon == targetEdgeTargetNodePtr->lon &&
@@ -93,8 +93,8 @@ void applyRestrictions(
 
     auto sourceEdgeSourceNodePtr = nodes + sourceEdge->sourceNodeOffset;
     auto sourceEdgeTargetNodePtr = nodes + sourceEdge->targetNodeOffset;
-    auto targetEdgeSourceNodePtr = nodes + targetEdge.sourceNodeOffset;
-    auto targetEdgeTargetNodePtr = nodes + targetEdge.targetNodeOffset;
+    auto targetEdgeSourceNodePtr = borderNodes + targetEdge.sourceNodeOffset;
+    auto targetEdgeTargetNodePtr = borderNodes + targetEdge.targetNodeOffset;
 
     if (sourceEdgeSourceNodePtr->lat == targetEdgeTargetNodePtr->lat &&
         sourceEdgeSourceNodePtr->lon == targetEdgeTargetNodePtr->lon &&

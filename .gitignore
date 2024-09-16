@@ -3,4 +3,16 @@ main.dSYM
 test-data
 main
 *.csv
-disk-buffers/*
+bin/geo-partitions/edges/*
+bin/geo-partitions/exp-edges/*
+bin/geo-partitions/nodes/*
+bin/node-hash-partitions/nodes/*
+bin/node-hash-partitions/used-nodes/*
+bin/way-hash-partitions/ways/*
+bin/way-hash-partitions/way-nodes/*
+bin/way-hash-partitions/nodes-geo-partitions/*
+# bin/geo-partitions/.DS_Store
+# bin/node-hash-partitions/.DS_Store
+# bin/way-hash-partitions/.DS_Store
+# bin/.DS_Store
+bin/restrictions.bin

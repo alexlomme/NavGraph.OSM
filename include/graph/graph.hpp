@@ -15,7 +15,7 @@ namespace parser {
 namespace graph {
 struct Graph {
  public:
-  Graph(std::vector<parser::Edge>& edges);
+  Graph(parser::Edge* edges, size_t edgesCount);
 
   void invert(std::vector<parser::Edge>& edges,
               std::unordered_multimap<

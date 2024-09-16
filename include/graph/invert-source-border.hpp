@@ -10,10 +10,10 @@ namespace graph {
 namespace invert {
 
 template <typename E, typename EE>
-void applyRestrictions(
+void applyRestrictionsSourceBorder(
     E* sourceEdge,
     std::unordered_map<google::protobuf::int64, std::vector<EE*>>& graph,
-    parser::Node* nodes,
+    parser::Node* nodes, parser::Node* borderNodes,
     std::unordered_multimap<
         std::tuple<google::protobuf::int64, google::protobuf::int64>,
         parser::Restriction*>& onlyRestrictionsHash,
@@ -60,8 +60,8 @@ void applyRestrictions(
                      });
 
     if (targetEdgePtrIt != graphNodePairIt->second.end()) {
-      auto sourceEdgeSourceNodePtr = nodes + sourceEdge->sourceNodeOffset;
-      auto sourceEdgeTargetNodePtr = nodes + sourceEdge->targetNodeOffset;
+      auto sourceEdgeSourceNodePtr = borderNodes + sourceEdge->sourceNodeOffset;
+      auto sourceEdgeTargetNodePtr = borderNodes + sourceEdge->targetNodeOffset;
       auto targetEdgeSourceNodePtr =
           nodes + (*targetEdgePtrIt)->sourceNodeOffset;
       auto targetEdgeTargetNodePtr =
@@ -91,8 +91,8 @@ void applyRestrictions(
   for (auto targetEdgePtr : graphNodePairIt->second) {
     auto targetEdge = *targetEdgePtr;
 
-    auto sourceEdgeSourceNodePtr = nodes + sourceEdge->sourceNodeOffset;
-    auto sourceEdgeTargetNodePtr = nodes + sourceEdge->targetNodeOffset;
+    auto sourceEdgeSourceNodePtr = borderNodes + sourceEdge->sourceNodeOffset;
+    auto sourceEdgeTargetNodePtr = borderNodes + sourceEdge->targetNodeOffset;
     auto targetEdgeSourceNodePtr = nodes + targetEdge.sourceNodeOffset;
     auto targetEdgeTargetNodePtr = nodes + targetEdge.targetNodeOffset;
 

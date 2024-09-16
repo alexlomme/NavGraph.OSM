@@ -8,9 +8,13 @@
 namespace parser {
 struct Edge {
   google::protobuf::int64 id;
-  parser::Way* wayPtr;
-  parser::Node* sourceNodePtr;
-  parser::Node* targetNodePtr;
+  google::protobuf::int64 wayId;
+  uint64_t wayOffset;
+  google::protobuf::int64 sourceNodeId;
+  uint64_t sourceNodeOffset;
+  google::protobuf::int64 targetNodeId;
+  uint64_t targetNodeOffset;
   double cost;
+  long partition;
 };
 }  // namespace parser

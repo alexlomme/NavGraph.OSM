@@ -20,10 +20,10 @@ SRC				   := ./include/osmpbf/osmformat.pb.cc \
                       ./include/osmpbf/fileformat.pb.cc \
                       ./include/parsing/primitive-block-parser.cpp \
                       ./include/utils/geomath.cpp \
-                      ./include/graph/graph.cpp \
                       ./include/graph/ways-to-edges.cpp \
                       ./include/processing.cpp \
-                      ./include/parsing/parsing-functions.cpp
+                      ./include/parsing/parsing-functions.cpp \
+                      ./include/graph/graph.cpp
 # -lz -lexpat -lbz2
 
 main:
