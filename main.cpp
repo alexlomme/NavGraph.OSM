@@ -79,39 +79,34 @@ int main(int argc, char* argv[]) {
 
   // open and map pbf file for reading
 
-  std::string filename = argv[1];
-  int fd = open(filename.data(), O_RDONLY);
-  if (fd == -1) {
+  int fd_pbf = open(argv[1], O_RDONLY);
+  if (fd_pbf == -1) {
     std::cerr << "Failed to open .osm.pbf file" << std::endl;
     return 1;
   }
-  struct stat sb;
-  if (fstat(fd, &sb) == -1) {
-    close(fd);
-    std::cerr << "Failed fstat" << std::endl;
+  struct stat sb_pbf;
+  if (fstat(fd_pbf, &sb_pbf) == -1) {
+    close(fd_pbf);
+    std::cerr << "Failed fstat when opening .pbf file" << std::endl;
     return 1;
   }
-  size_t pbf_size = sb.st_size;
-  void* mapped_pbf = mmap(nullptr, pbf_size, PROT_READ, MAP_PRIVATE, fd, 0);
+  size_t pbf_size = sb_pbf.st_size;
+  void* mapped_pbf = mmap(nullptr, pbf_size, PROT_READ, MAP_PRIVATE, fd_pbf, 0);
   if (mapped_pbf == MAP_FAILED) {
-    close(fd);
+    close(fd_pbf);
     std::cerr << ".osm.pbf mmap failed" << std::endl;
     return 1;
   }
-  close(fd);
+  close(fd_pbf);
   const char* pbf_data = static_cast<const char*>(mapped_pbf);
   const char* eof_pbf = pbf_data + pbf_size;
 
-  // ---------------------------------------------------------
+  // open node files in node-hash partitions
 
-  std::vector<int> node_fds;
-  node_fds.resize(HASH_PARTITIONS_NUM);
-
-  std::vector<void*> node_maps(HASH_PARTITIONS_NUM);
-
+  std::vector<int> node_fds(HASH_PARTITIONS_NUM);
   std::vector<size_t> node_sizes(HASH_PARTITIONS_NUM);
 
-  for (uint8_t i = 0; i < HASH_PARTITIONS_NUM; i++) {
+  for (uint64_t i = 0; i < HASH_PARTITIONS_NUM; i++) {
     std::ostringstream stream;
     stream << "./bin/node-hash-partitions/nodes/nodes-" << std::to_string(i)
            << ".bin";
@@ -119,15 +114,14 @@ int main(int argc, char* argv[]) {
     node_fds[i] =
         open(filename.data(), O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
     if (node_fds[i] == -1) {
-      std::cerr << "Failed to open file.\n";
-      return -1;
+      std::cerr << "Failed to open file: " << filename << std::endl;
+      return 1;
     }
   }
 
-  // -----------------------------------------------------------
+  // open way files in way-hash partitions
 
   std::vector<int> way_fds(HASH_PARTITIONS_NUM);
-  std::vector<void*> way_maps(HASH_PARTITIONS_NUM);
   std::vector<size_t> way_sizes(HASH_PARTITIONS_NUM);
 
   for (uint64_t i = 0; i < HASH_PARTITIONS_NUM; i++) {
@@ -138,18 +132,17 @@ int main(int argc, char* argv[]) {
     way_fds[i] =
         open(filename.data(), O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
     if (way_fds[i] == -1) {
-      std::cerr << "Failed to open file.\n";
+      std::cerr << "Failed to open file: " << filename << std::endl;
       return 1;
     }
   }
 
-  // --------------------------------------------------------------
+  // open way-node files in way-hash partitions
 
   std::vector<int> way_node_fds(HASH_PARTITIONS_NUM);
-  std::vector<void*> way_node_maps(HASH_PARTITIONS_NUM);
   std::vector<size_t> way_node_sizes(HASH_PARTITIONS_NUM);
 
-  for (uint8_t i = 0; i < HASH_PARTITIONS_NUM; i++) {
+  for (uint64_t i = 0; i < HASH_PARTITIONS_NUM; i++) {
     std::ostringstream stream;
     stream << "./bin/way-hash-partitions/way-nodes/way-nodes-"
            << std::to_string(i) << ".bin";
@@ -157,15 +150,14 @@ int main(int argc, char* argv[]) {
     way_node_fds[i] =
         open(filename.data(), O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
     if (way_node_fds[i] == -1) {
-      std::cerr << "Failed to open file.\n";
+      std::cerr << "Failed to open file: " << filename << std::endl;
       return 1;
     }
   }
 
-  // --------------------------------------------------------------
+  // open used-nodes files in node-hash partitions
 
   std::vector<int> used_nodes_fds(HASH_PARTITIONS_NUM);
-  std::vector<void*> used_nodes_maps(HASH_PARTITIONS_NUM);
   std::vector<size_t> used_nodes_sizes(HASH_PARTITIONS_NUM);
 
   for (uint64_t i = 0; i < HASH_PARTITIONS_NUM; i++) {
@@ -176,25 +168,20 @@ int main(int argc, char* argv[]) {
     used_nodes_fds[i] =
         open(filename.data(), O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
     if (used_nodes_fds[i] == -1) {
-      std::cerr << "Failed to open file.\n";
+      std::cerr << "Failed to open file: " << filename << std::endl;
       return 1;
     }
   }
 
-  // --------------------------------------------------------------
-
-  // --------------------------------------------------------------
+  // open restrictions file for writing
 
   int fd_rests = open("./bin/restrictions.bin", O_RDWR | O_CREAT | O_TRUNC,
                       S_IRUSR | S_IWUSR);
-
   if (fd_rests == -1) {
-    std::cerr << "failed to open file with restrictions for writing"
-              << std::endl;
-    return -1;
+    std::cerr << "failed to open file: ./bin/restrictions.bin" << std::endl;
+    return 1;
   }
   size_t rests_size = 0;
-  void* map_rests;
 
   auto parseWaysDuration =
       std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -204,16 +191,14 @@ int main(int argc, char* argv[]) {
       std::chrono::duration_cast<std::chrono::milliseconds>(
           std::chrono::high_resolution_clock::now() -
           std::chrono::high_resolution_clock::now());
-  auto parseRestsDuration =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-          std::chrono::high_resolution_clock::now() -
-          std::chrono::high_resolution_clock::now());
 
-  std::vector<std::vector<DiskNode>> nodeBuffers;
-  nodeBuffers.resize(HASH_PARTITIONS_NUM);
+  // initialize buffers
 
-  std::vector<std::vector<DiskWay>> wayBuffers;
-  wayBuffers.resize(HASH_PARTITIONS_NUM);
+  std::vector<std::vector<DiskNode>> nodeHnBuffers;
+  nodeHnBuffers.resize(HASH_PARTITIONS_NUM);
+
+  std::vector<std::vector<DiskWay>> wayHwBuffers;
+  wayHwBuffers.resize(HASH_PARTITIONS_NUM);
 
   std::vector<std::vector<google::protobuf::int64>> wayNodeBuffers;
   wayNodeBuffers.resize(HASH_PARTITIONS_NUM);
@@ -310,32 +295,31 @@ int main(int argc, char* argv[]) {
 
         uint64_t hash = MurmurHash64A_1(way.id()) & HASH_MASK;
 
-        wayBuffers[hash].push_back(
+        wayHwBuffers[hash].push_back(
             DiskWay{way.id(), offsets[hash], way.refs_size(), oneway});
 
-        if (wayBuffers[hash].size() >= MAX_WAY_BUF_SIZE) {
-          way_sizes[hash] += sizeof(DiskWay) * wayBuffers[hash].size();
+        if (wayHwBuffers[hash].size() >= MAX_WAY_BUF_SIZE) {
+          way_sizes[hash] += sizeof(DiskWay) * wayHwBuffers[hash].size();
 
           if (ftruncate(way_fds[hash], way_sizes[hash]) == -1) {
-            std::cerr << "failed to alloc memory for ways";
+            std::cerr << "failed to truncate memory for ways" << std::endl;
             return 1;
           }
-          way_maps[hash] =
-              mmap(nullptr, way_sizes[hash], PROT_READ | PROT_WRITE, MAP_SHARED,
-                   way_fds[hash], 0);
-          if (way_maps[hash] == MAP_FAILED) {
+          void* map = mmap(nullptr, way_sizes[hash], PROT_READ | PROT_WRITE,
+                           MAP_SHARED, way_fds[hash], 0);
+          if (map == MAP_FAILED) {
             std::cerr << "Failed ways mapping" << std::endl;
             return 1;
           }
-          std::memcpy(static_cast<char*>(way_maps[hash]) + way_sizes[hash] -
-                          sizeof(DiskWay) * wayBuffers[hash].size(),
-                      wayBuffers[hash].data(),
-                      sizeof(DiskWay) * wayBuffers[hash].size());
-          if (munmap(way_maps[hash], way_sizes[hash]) == -1) {
+          std::memcpy(static_cast<char*>(map) + way_sizes[hash] -
+                          sizeof(DiskWay) * wayHwBuffers[hash].size(),
+                      wayHwBuffers[hash].data(),
+                      sizeof(DiskWay) * wayHwBuffers[hash].size());
+          if (munmap(map, way_sizes[hash]) == -1) {
             std::cerr << "Failed to unmap ways-file" << std::endl;
             return 1;
           }
-          wayBuffers[hash].clear();
+          wayHwBuffers[hash].clear();
         }
 
         google::protobuf::int64 id = 0;
@@ -353,21 +337,21 @@ int main(int argc, char* argv[]) {
               std::cerr << "failed to alloc memory for ways";
               return 1;
             }
-            way_node_maps[hash] =
+            void* map =
                 mmap(nullptr, way_node_sizes[hash], PROT_READ | PROT_WRITE,
                      MAP_SHARED, way_node_fds[hash], 0);
 
-            if (way_node_maps[hash] == MAP_FAILED) {
+            if (map == MAP_FAILED) {
               std::cerr << "Failed mapping way-nodes file" << std::endl;
               return 1;
             }
             std::memcpy(
-                static_cast<char*>(way_node_maps[hash]) + way_node_sizes[hash] -
+                static_cast<char*>(map) + way_node_sizes[hash] -
                     sizeof(google::protobuf::int64) *
                         wayNodeBuffers[hash].size(),
                 wayNodeBuffers[hash].data(),
                 sizeof(google::protobuf::int64) * wayNodeBuffers[hash].size());
-            if (munmap(way_node_maps[hash], way_node_sizes[hash]) == -1) {
+            if (munmap(map, way_node_sizes[hash]) == -1) {
               throw std::runtime_error("Failed to unmap ways file");
             }
             wayNodeBuffers[hash].clear();
@@ -390,34 +374,26 @@ int main(int argc, char* argv[]) {
               std::cerr << "failed to alloc memory for ways";
               return 1;
             }
-            used_nodes_maps[nodeHash] = mmap(
-                nullptr, used_nodes_sizes[nodeHash], PROT_READ | PROT_WRITE,
-                MAP_SHARED, used_nodes_fds[nodeHash], 0);
+            void* map = mmap(nullptr, used_nodes_sizes[nodeHash],
+                             PROT_READ | PROT_WRITE, MAP_SHARED,
+                             used_nodes_fds[nodeHash], 0);
 
-            if (used_nodes_maps[nodeHash] == MAP_FAILED) {
+            if (map == MAP_FAILED) {
               std::cerr << "Failed mapping way-nodes file" << std::endl;
               return 1;
             }
             std::memcpy(
-                static_cast<char*>(used_nodes_maps[nodeHash]) +
-                    used_nodes_sizes[nodeHash] -
+                static_cast<char*>(map) + used_nodes_sizes[nodeHash] -
                     sizeof(std::pair<google::protobuf::int64, uint16_t>) *
                         usedNodesBuffers[nodeHash].size(),
                 usedNodesBuffers[nodeHash].data(),
                 sizeof(std::pair<google::protobuf::int64, uint16_t>) *
                     usedNodesBuffers[nodeHash].size());
-            if (munmap(used_nodes_maps[nodeHash], used_nodes_sizes[nodeHash]) ==
-                -1) {
+            if (munmap(map, used_nodes_sizes[nodeHash]) == -1) {
               throw std::runtime_error("Failed to unmap ways file");
             }
             usedNodesBuffers[nodeHash].clear();
           }
-
-          // wayNodes.emplace_back(
-          //     index == 0 || index == way.refs_size() - 1 ? -id : id,
-          //     way.id());
-
-          // offset++;
         }
       }
 
@@ -431,7 +407,9 @@ int main(int argc, char* argv[]) {
 
       if (denseNodes.id_size() != denseNodes.lon_size() ||
           denseNodes.id_size() != denseNodes.lat_size()) {
-        throw std::runtime_error("Lacking information for dense nodes\n");
+        std::cerr << "Number of ids/lats/lons unequal in dense nodes"
+                  << std::endl;
+        return 1;
       }
 
       int64_t id = 0;
@@ -459,31 +437,30 @@ int main(int argc, char* argv[]) {
 
         uint64_t hash = MurmurHash64A_1(id) & HASH_MASK;
 
-        nodeBuffers[hash].push_back(DiskNode{id, lat, lon});
+        nodeHnBuffers[hash].push_back(DiskNode{id, lat, lon});
 
-        if (nodeBuffers[hash].size() >= MAX_NODE_BUF_SIZE) {
-          node_sizes[hash] += nodeBuffers[hash].size() * sizeof(DiskNode);
+        if (nodeHnBuffers[hash].size() >= MAX_NODE_BUF_SIZE) {
+          node_sizes[hash] += nodeHnBuffers[hash].size() * sizeof(DiskNode);
           if (ftruncate(node_fds[hash], node_sizes[hash]) == -1) {
             std::cerr << "failed to alloc memory";
             return 1;
           }
 
-          node_maps[hash] =
-              mmap(nullptr, node_sizes[hash], PROT_READ | PROT_WRITE,
-                   MAP_SHARED, node_fds[hash], 0);
-          if (node_maps[hash] == MAP_FAILED) {
+          void* map = mmap(nullptr, node_sizes[hash], PROT_READ | PROT_WRITE,
+                           MAP_SHARED, node_fds[hash], 0);
+          if (map == MAP_FAILED) {
             std::cerr << "Failed to map nodes file" << std::endl;
             return 1;
           }
-          std::memcpy(static_cast<char*>(node_maps[hash]) + node_sizes[hash] -
-                          nodeBuffers[hash].size() * sizeof(DiskNode),
-                      nodeBuffers[hash].data(),
-                      nodeBuffers[hash].size() * sizeof(DiskNode));
+          std::memcpy(static_cast<char*>(map) + node_sizes[hash] -
+                          nodeHnBuffers[hash].size() * sizeof(DiskNode),
+                      nodeHnBuffers[hash].data(),
+                      nodeHnBuffers[hash].size() * sizeof(DiskNode));
           if (node_sizes[hash] != 0) {
-            munmap(node_maps[hash], node_sizes[hash]);
+            munmap(map, node_sizes[hash]);
           }
 
-          nodeBuffers[hash].clear();
+          nodeHnBuffers[hash].clear();
         }
       }
 
@@ -582,25 +559,19 @@ int main(int argc, char* argv[]) {
       }
 
       if (rests.size() != 0) {
-        if (rests_size != 0) {
-          if (munmap(map_rests, rests_size) == -1) {
-            throw std::runtime_error("Failed to unmap ways file");
-          }
-        }
-
         rests_size += sizeof(DiskRestriction) * rests.size();
 
         if (ftruncate(fd_rests, rests_size) == -1) {
           std::cerr << "failed to alloc memory for ways";
           return 1;
         }
-        map_rests = mmap(nullptr, rests_size, PROT_READ | PROT_WRITE,
+        void* map = mmap(nullptr, rests_size, PROT_READ | PROT_WRITE,
                          MAP_SHARED, fd_rests, 0);
-        if (map_rests == MAP_FAILED) {
+        if (map == MAP_FAILED) {
           std::cerr << "Failed to map restictions-file" << std::endl;
           return 1;
         }
-        std::memcpy(static_cast<char*>(map_rests) + rests_size -
+        std::memcpy(static_cast<char*>(map) + rests_size -
                         sizeof(DiskRestriction) * rests.size(),
                     rests.data(), rests.size() * sizeof(DiskRestriction));
       }
@@ -608,59 +579,64 @@ int main(int argc, char* argv[]) {
     delete[] uncompressedData;
   }
 
+  // unmap .pbf
+
   if (munmap(mapped_pbf, pbf_size) == -1) {
     std::cerr << "Failed unmapping .pbf.osm" << std::endl;
     return 1;
   }
 
   for (uint64_t i = 0; i < HASH_PARTITIONS_NUM; i++) {
-    node_sizes[i] += nodeBuffers[i].size() * sizeof(DiskNode);
+    node_sizes[i] += nodeHnBuffers[i].size() * sizeof(DiskNode);
     if (ftruncate(node_fds[i], node_sizes[i]) == -1) {
       std::cerr << "failed to alloc memory";
       return 1;
     }
 
-    node_maps[i] = mmap(nullptr, node_sizes[i], PROT_READ | PROT_WRITE,
-                        MAP_SHARED, node_fds[i], 0);
-    if (node_maps[i] == MAP_FAILED) {
+    void* map = mmap(nullptr, node_sizes[i], PROT_READ | PROT_WRITE, MAP_SHARED,
+                     node_fds[i], 0);
+    if (map == MAP_FAILED) {
       std::cerr << "Failed to map nodes file" << std::endl;
       return 1;
     }
-    std::memcpy(static_cast<char*>(node_maps[i]) + node_sizes[i] -
-                    nodeBuffers[i].size() * sizeof(DiskNode),
-                nodeBuffers[i].data(),
-                nodeBuffers[i].size() * sizeof(DiskNode));
+    std::memcpy(static_cast<char*>(map) + node_sizes[i] -
+                    nodeHnBuffers[i].size() * sizeof(DiskNode),
+                nodeHnBuffers[i].data(),
+                nodeHnBuffers[i].size() * sizeof(DiskNode));
     if (node_sizes[i] != 0) {
-      munmap(node_maps[i], node_sizes[i]);
+      munmap(map, node_sizes[i]);
     }
 
-    nodeBuffers[i].clear();
+    nodeHnBuffers[i].clear();
     close(node_fds[i]);
   }
+  nodeHnBuffers.clear();
 
   for (uint64_t i = 0; i < HASH_PARTITIONS_NUM; i++) {
-    way_sizes[i] += wayBuffers[i].size() * sizeof(DiskWay);
+    way_sizes[i] += wayHwBuffers[i].size() * sizeof(DiskWay);
     if (ftruncate(way_fds[i], way_sizes[i]) == -1) {
       std::cerr << "failed to alloc memory";
       return 1;
     }
 
-    way_maps[i] = mmap(nullptr, way_sizes[i], PROT_READ | PROT_WRITE,
-                       MAP_SHARED, way_fds[i], 0);
-    if (way_maps[i] == MAP_FAILED) {
+    void* map = mmap(nullptr, way_sizes[i], PROT_READ | PROT_WRITE, MAP_SHARED,
+                     way_fds[i], 0);
+    if (map == MAP_FAILED) {
       std::cerr << "Failed to map nodes file" << std::endl;
       return 1;
     }
-    std::memcpy(static_cast<char*>(way_maps[i]) + way_sizes[i] -
-                    wayBuffers[i].size() * sizeof(DiskWay),
-                wayBuffers[i].data(), wayBuffers[i].size() * sizeof(DiskWay));
+    std::memcpy(static_cast<char*>(map) + way_sizes[i] -
+                    wayHwBuffers[i].size() * sizeof(DiskWay),
+                wayHwBuffers[i].data(),
+                wayHwBuffers[i].size() * sizeof(DiskWay));
     if (way_sizes[i] != 0) {
-      munmap(way_maps[i], way_sizes[i]);
+      munmap(map, way_sizes[i]);
     }
 
-    wayBuffers[i].clear();
+    wayHwBuffers[i].clear();
     close(way_fds[i]);
   }
+  wayHwBuffers.clear();
 
   for (uint64_t i = 0; i < HASH_PARTITIONS_NUM; i++) {
     way_node_sizes[i] +=
@@ -670,23 +646,24 @@ int main(int argc, char* argv[]) {
       return 1;
     }
 
-    way_node_maps[i] = mmap(nullptr, way_node_sizes[i], PROT_READ | PROT_WRITE,
-                            MAP_SHARED, way_node_fds[i], 0);
-    if (way_node_maps[i] == MAP_FAILED) {
+    void* map = mmap(nullptr, way_node_sizes[i], PROT_READ | PROT_WRITE,
+                     MAP_SHARED, way_node_fds[i], 0);
+    if (map == MAP_FAILED) {
       std::cerr << "Failed to map nodes file" << std::endl;
       return 1;
     }
-    std::memcpy(static_cast<char*>(way_node_maps[i]) + way_node_sizes[i] -
+    std::memcpy(static_cast<char*>(map) + way_node_sizes[i] -
                     wayNodeBuffers[i].size() * sizeof(google::protobuf::int64),
                 wayNodeBuffers[i].data(),
                 wayNodeBuffers[i].size() * sizeof(google::protobuf::int64));
     if (way_node_sizes[i] != 0) {
-      munmap(way_node_maps[i], way_node_sizes[i]);
+      munmap(map, way_node_sizes[i]);
     }
 
     wayNodeBuffers[i].clear();
     close(way_node_fds[i]);
   }
+  wayNodeBuffers.clear();
 
   for (uint64_t i = 0; i < HASH_PARTITIONS_NUM; i++) {
     used_nodes_sizes[i] += usedNodesBuffers[i].size() *
@@ -696,37 +673,28 @@ int main(int argc, char* argv[]) {
       return 1;
     }
 
-    used_nodes_maps[i] =
-        mmap(nullptr, used_nodes_sizes[i], PROT_READ | PROT_WRITE, MAP_SHARED,
-             used_nodes_fds[i], 0);
-    if (used_nodes_maps[i] == MAP_FAILED) {
+    void* map = mmap(nullptr, used_nodes_sizes[i], PROT_READ | PROT_WRITE,
+                     MAP_SHARED, used_nodes_fds[i], 0);
+    if (map == MAP_FAILED) {
       std::cerr << "Failed to map nodes file" << std::endl;
       return 1;
     }
-    std::memcpy(static_cast<char*>(used_nodes_maps[i]) + used_nodes_sizes[i] -
+    std::memcpy(static_cast<char*>(map) + used_nodes_sizes[i] -
                     usedNodesBuffers[i].size() *
                         sizeof(std::pair<google::protobuf::int64, uint16_t>),
                 usedNodesBuffers[i].data(),
                 usedNodesBuffers[i].size() *
                     sizeof(std::pair<google::protobuf::int64, uint16_t>));
     if (used_nodes_sizes[i] != 0) {
-      munmap(used_nodes_maps[i], used_nodes_sizes[i]);
+      munmap(map, used_nodes_sizes[i]);
     }
 
     usedNodesBuffers[i].clear();
     close(used_nodes_fds[i]);
   }
-
-  if (munmap(map_rests, rests_size) == -1) {
-    std::cerr << "Failed unmapping restrictions" << std::endl;
-    return 1;
-  }
-  close(fd_rests);
-
-  nodeBuffers.clear();
-  wayBuffers.clear();
-  wayNodeBuffers.clear();
   usedNodesBuffers.clear();
+
+  close(fd_rests);
 
   std::cerr << "Time for parsing ways: " << parseWaysDuration.count() << "ms"
             << std::endl;
@@ -739,7 +707,7 @@ int main(int argc, char* argv[]) {
             << std::endl;
 
   std::vector<int> geo_part_fds(HASH_PARTITIONS_NUM);
-  std::vector<void*> geo_part_maps(HASH_PARTITIONS_NUM);
+
   std::vector<size_t> geo_part_sizes(HASH_PARTITIONS_NUM);
 
   for (uint64_t i = 0; i < HASH_PARTITIONS_NUM; i++) {
@@ -796,6 +764,8 @@ int main(int argc, char* argv[]) {
       std::cerr << "Failed opening fd" << std::endl;
       return 1;
     }
+
+    unlink(un_fn.data());
 
     struct stat sb_un;
     if (fstat(un_fd, &sb_un) == -1) {
@@ -860,6 +830,8 @@ int main(int argc, char* argv[]) {
       std::cerr << "Failed opening fd" << std::endl;
       return 1;
     }
+
+    unlink(filename.data());
 
     struct stat sb;
     if (fstat(fd_part, &sb) == -1) {
@@ -991,21 +963,20 @@ int main(int argc, char* argv[]) {
             std::cerr << "failed to alloc memory for ways";
             return 1;
           }
-          geo_part_maps[wayHash] =
+          void* map =
               mmap(nullptr, geo_part_sizes[wayHash], PROT_READ | PROT_WRITE,
                    MAP_SHARED, geo_part_fds[wayHash], 0);
 
-          if (geo_part_maps[wayHash] == MAP_FAILED) {
+          if (map == MAP_FAILED) {
             std::cerr << "Failed mapping geo-parts file" << std::endl;
             return 1;
           }
           std::memcpy(
-              static_cast<char*>(geo_part_maps[wayHash]) +
-                  geo_part_sizes[wayHash] -
+              static_cast<char*>(map) + geo_part_sizes[wayHash] -
                   sizeof(WayHashedNode) * geoPartsBuffers[wayHash].size(),
               geoPartsBuffers[wayHash].data(),
               sizeof(WayHashedNode) * geoPartsBuffers[wayHash].size());
-          if (munmap(geo_part_maps[wayHash], geo_part_sizes[wayHash]) == -1) {
+          if (munmap(map, geo_part_sizes[wayHash]) == -1) {
             throw std::runtime_error("Failed to unmap ways file");
           }
           geoPartsBuffers[wayHash].clear();
@@ -1029,28 +1000,24 @@ int main(int argc, char* argv[]) {
       std::cerr << "failed to alloc memory for ways";
       return 1;
     }
-    geo_part_maps[wayHash] =
-        mmap(nullptr, geo_part_sizes[wayHash], PROT_READ | PROT_WRITE,
-             MAP_SHARED, geo_part_fds[wayHash], 0);
+    void* map = mmap(nullptr, geo_part_sizes[wayHash], PROT_READ | PROT_WRITE,
+                     MAP_SHARED, geo_part_fds[wayHash], 0);
 
-    if (geo_part_maps[wayHash] == MAP_FAILED) {
+    if (map == MAP_FAILED) {
       std::cerr << "Failed mapping geo-parts file (rest) " << wayHash
                 << std::endl;
       return 1;
     }
-    std::memcpy(static_cast<char*>(geo_part_maps[wayHash]) +
-                    geo_part_sizes[wayHash] -
+    std::memcpy(static_cast<char*>(map) + geo_part_sizes[wayHash] -
                     sizeof(WayHashedNode) * geoPartsBuffers[wayHash].size(),
                 geoPartsBuffers[wayHash].data(),
                 sizeof(WayHashedNode) * geoPartsBuffers[wayHash].size());
-    if (munmap(geo_part_maps[wayHash], geo_part_sizes[wayHash]) == -1) {
+    if (munmap(map, geo_part_sizes[wayHash]) == -1) {
       throw std::runtime_error("Failed to unmap ways file");
     }
     geoPartsBuffers[wayHash].clear();
     close(geo_part_fds[wayHash]);
   }
-
-  std::cerr << "POINT" << std::endl;
 
   for (long ipix : pixels) {
     auto fileIt = pixelNodeFiles.find(ipix);
@@ -1095,20 +1062,14 @@ int main(int argc, char* argv[]) {
   nodePartitions.clear();
   geoPartsBuffers.clear();
 
-  // std::vector<parser::BorderWay> borderWays;
-  // std::unordered_map<uint32_t, std::vector<DiskWay>> wayPartitions;
   std::vector<parser::Edge> borderEdges;
   std::unordered_map<uint32_t, std::vector<parser::Edge>> edgePartitions;
 
   // fd ways, size ways, fd way-nodes, size way-nodes, way-nodes offset
-  std::unordered_map<uint32_t, std::tuple<int, size_t, int, size_t, uint64_t>>
-      pixelWayFiles;
+  std::unordered_map<uint32_t, std::tuple<int, size_t>> pixelWayFiles;
   std::unordered_map<uint32_t, std::vector<google::protobuf::int64>>
       wayNodePartitions;
 
-  // uint64_t wayBufSizesSum = 0;
-  // uint64_t maxWayBufSize = 0;
-  // uint32_t maxWayBufIpix = -1;
   uint64_t edgeBufSizesSum = 0;
   uint64_t maxEdgeBufSize = 0;
   long maxEdgeBufIpix = -1;
@@ -1131,19 +1092,8 @@ int main(int argc, char* argv[]) {
       return -1;
     }
 
-    std::ostringstream stream_wn;
-    stream_wn << "./bin/geo-partitions/way-nodes/way-nodes-"
-              << std::to_string(ipix) << ".bin";
-    std::string filename_wn = stream_wn.str();
-    int fd_wn =
-        open(filename_wn.data(), O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
-    if (fd_wn == -1) {
-      std::cerr << "Failed to open file.\n";
-      return -1;
-    }
-
     pixelWayFiles.emplace(std::piecewise_construct, std::forward_as_tuple(ipix),
-                          std::forward_as_tuple(fd_e, 0, fd_wn, 0, 0));
+                          std::forward_as_tuple(fd_e, 0));
   }
 
   std::vector<parser::Node> borderNodes;
@@ -1158,6 +1108,8 @@ int main(int argc, char* argv[]) {
       std::cerr << "Failed opening fd" << std::endl;
       return 1;
     }
+
+    unlink(gp_fn.data());
 
     struct stat sb_gp;
     if (fstat(gp_fd, &sb_gp) == -1) {
@@ -1183,11 +1135,6 @@ int main(int argc, char* argv[]) {
       nodeGeoPartitions.emplace(gp->id, gp);
     }
 
-    // if (munmap(gp_map, gp_size) == -1) {
-    //   std::cerr << "Failed unmapping geo-parts file" << std::endl;
-    //   return 1;
-    // }
-
     std::ostringstream w_fn_stream;
     w_fn_stream << "./bin/way-hash-partitions/ways/ways-" << std::to_string(i)
                 << ".bin";
@@ -1197,6 +1144,8 @@ int main(int argc, char* argv[]) {
       std::cerr << "Failed opening fd" << std::endl;
       return 1;
     }
+
+    unlink(w_fn.data());
 
     struct stat sb_w;
     if (fstat(w_fd, &sb_w) == -1) {
@@ -1225,6 +1174,8 @@ int main(int argc, char* argv[]) {
       std::cerr << "Failed opening fd" << std::endl;
       return 1;
     }
+
+    unlink(wn_fn.data());
 
     struct stat sb_wn;
     if (fstat(wn_fd, &sb_wn) == -1) {
@@ -1310,19 +1261,9 @@ int main(int argc, char* argv[]) {
             const auto& [tup, _] = edgePartitions.emplace(
                 std::piecewise_construct, std::forward_as_tuple(sourceIpix),
                 std::forward_as_tuple());
-
-            // tup->second.push_back(DiskWay{way->id,
-            //                               std::get<4>(partFilesIt->second),
-            //                               way->size, way->oneway});
             tup->second.push_back(parser::Edge{
                 id, way->id, 0, sourceNodePtr->id, sourceNodePtr->offset,
                 nodePtr->id, nodePtr->offset, cost, sourceIpix});
-            // std::get<4>(partFilesIt->second) += way->size;
-            // wayBufSizesSum++;
-            // if (1 > maxWayBufSize) {
-            //   maxWayBufSize = 1;
-            //   maxWayBufIpix = refPart;
-            // }
             edgeBufSizesSum++;
             if (!way->oneway) {
               tup->second.push_back(parser::Edge{
@@ -1335,16 +1276,6 @@ int main(int argc, char* argv[]) {
               maxEdgeBufIpix = sourceIpix;
             }
           } else {
-            // partIt->second.push_back(DiskWay{way->id,
-            //                                  std::get<4>(partFilesIt->second),
-            //                                  way->size, way->oneway});
-            // std::get<4>(partFilesIt->second) += way->size;
-            // wayBufSizesSum++;
-            // if (partIt->second.size() >= maxWayBufSize) {
-            //   maxWayBufSize = partIt->second.size();
-            //   maxWayBufIpix = refPart;
-            // }
-
             partIt->second.push_back(parser::Edge{
                 id, way->id, 0, sourceNodePtr->id, sourceNodePtr->offset,
                 nodePtr->id, nodePtr->offset, cost, sourceIpix});
@@ -1423,209 +1354,11 @@ int main(int argc, char* argv[]) {
           }
         }
 
-        // edgesBuf.push_back(parser::Edge{
-        //     edgeId, wayPtr->id, i, (nodes + sourceNodeOffset)->id,
-        //     sourceNodeOffset, (nodes + nodeOffset)->id, nodeOffset, cost,
-        //     0});
-
-        // if (!wayPtr->oneway) {
-        //   edgeId++;
-        //   edgesBuf.push_back(parser::Edge{
-        //       edgeId, wayPtr->id, i, (nodes + nodeOffset)->id, nodeOffset,
-        //       (nodes + sourceNodeOffset)->id, sourceNodeOffset, cost, 0});
-        // }
-
         sourceNodePtr = nodePtr;
         sourceIpix = ipix;
         cost = 0;
         edgeId++;
-
-        // if (ipix != refPart) {
-        //   partitionable = false;
-        //   break;
-        // }
       }
-
-      // std::vector<google::protobuf::int64> nodesInWay;
-      // nodesInWay.reserve(way->size);
-
-      // for (uint64_t k = 0; k < way->size; k++) {
-      //   nodesInWay.push_back(*(refs + k));
-      // }
-
-      // if (!partitionable) {
-      //   auto& bw = borderWays.emplace_back(way->id, way->oneway);
-      //   bw.nodes.reserve(way->size);
-      //   for (uint64_t k = 0; k < way->size; k++) {
-      //     auto nodeId = *(refs + k);
-
-      //     const auto uit = nodeGeoPartitions.find(nodeId);
-      //     if (uit == nodeGeoPartitions.end()) {
-      //       throw std::runtime_error("Missing Node (3)");
-      //     }
-
-      //     if (bw.nodes.size() == 0 ||
-      //         bw.nodes[bw.nodes.size() - 1].first != uit->second) {
-      //       auto& [_, vec] = bw.nodes.emplace_back(
-      //           std::piecewise_construct, std::forward_as_tuple(uit->second),
-      //           std::forward_as_tuple());
-      //       vec.push_back(nodeId);
-      //       continue;
-      //     }
-
-      //     bw.nodes[bw.nodes.size() - 1].second.push_back(nodeId);
-      //   }
-
-      //   continue;
-      // }
-
-      // const auto partFilesIt = pixelWayFiles.find(refPart);
-
-      // if (partFilesIt == pixelWayFiles.end()) {
-      //   std::cerr << "No way files for pixel found" << std::endl;
-      //   return 1;
-      // }
-
-      // const auto partIt = wayPartitions.find(refPart);
-
-      // if (partIt == wayPartitions.end()) {
-      //   const auto& [tup, _] = wayPartitions.emplace(
-      //       std::piecewise_construct, std::forward_as_tuple(refPart),
-      //       std::forward_as_tuple());
-
-      //   tup->second.push_back(DiskWay{way->id,
-      //   std::get<4>(partFilesIt->second),
-      //                                 way->size, way->oneway});
-      //   std::get<4>(partFilesIt->second) += way->size;
-      //   wayBufSizesSum++;
-      //   if (1 > maxWayBufSize) {
-      //     maxWayBufSize = 1;
-      //     maxWayBufIpix = refPart;
-      //   }
-      // } else {
-      //   partIt->second.push_back(DiskWay{
-      //       way->id, std::get<4>(partFilesIt->second), way->size,
-      //       way->oneway});
-      //   std::get<4>(partFilesIt->second) += way->size;
-      //   wayBufSizesSum++;
-      //   if (partIt->second.size() >= maxWayBufSize) {
-      //     maxWayBufSize = partIt->second.size();
-      //     maxWayBufIpix = refPart;
-      //   }
-      // }
-
-      // if (wayBufSizesSum >= MAX_WAY_BUF_SIZES_SUM) {
-      //   auto fileIt = pixelWayFiles.find(maxWayBufIpix);
-      //   const auto maxBufIt = wayPartitions.find(maxWayBufIpix);
-
-      //   if (fileIt == pixelWayFiles.end() || maxBufIt == wayPartitions.end())
-      //   {
-      //     std::cerr << maxBufIpix << std::endl;
-      //     std::cerr << "No pixels found" << std::endl;
-      //     return 1;
-      //   }
-
-      //   get<1>(fileIt->second) += sizeof(DiskWay) * maxBufIt->second.size();
-
-      //   if (ftruncate(get<0>(fileIt->second), get<1>(fileIt->second)) == -1)
-      //   {
-      //     std::cerr << "failed to alloc memory for ways";
-      //     return 1;
-      //   }
-      //   void* map =
-      //       mmap(nullptr, get<1>(fileIt->second), PROT_READ | PROT_WRITE,
-      //            MAP_SHARED, get<0>(fileIt->second), 0);
-
-      //   if (map == MAP_FAILED) {
-      //     std::cerr << "Failed mapping geo-parts file" << std::endl;
-      //     return 1;
-      //   }
-      //   std::memcpy(static_cast<char*>(map) + get<1>(fileIt->second) -
-      //                   sizeof(DiskWay) * maxBufIt->second.size(),
-      //               maxBufIt->second.data(),
-      //               sizeof(DiskWay) * maxBufIt->second.size());
-      //   if (munmap(map, get<1>(fileIt->second)) == -1) {
-      //     throw std::runtime_error("Failed to unmap ways file");
-      //   }
-      //   wayBufSizesSum -= maxBufIt->second.size();
-      //   maxBufIt->second.clear();
-
-      //   maxWayBufSize = 0;
-      //   maxWayBufIpix = -1;
-
-      //   for (const auto& [ipix, buf] : wayPartitions) {
-      //     if (buf.size() >= maxWayBufSize) {
-      //       maxWayBufSize = buf.size();
-      //       maxWayBufIpix = ipix;
-      //     }
-      //   }
-      // }
-
-      // auto wnIt = wayNodePartitions.find(refPart);
-      // if (wnIt == wayNodePartitions.end()) {
-      //   wnIt = wayNodePartitions
-      //              .emplace(std::piecewise_construct,
-      //                       std::forward_as_tuple(refPart),
-      //                       std::forward_as_tuple())
-      //              .first;
-      // }
-
-      // for (const auto& nodeId : nodesInWay) {
-      //   wnIt->second.push_back(nodeId);
-      //   wayNodeBufSizesSum++;
-      //   if (wnIt->second.size() > maxWayNodeBufSize) {
-      //     maxWayNodeBufSize = wnIt->second.size();
-      //     maxWayNodeBufIpix = refPart;
-      //   }
-      //   if (wayNodeBufSizesSum >= MAX_WAY_NODE_BUF_SIZES_SUM) {
-      //     auto fileIt = pixelWayFiles.find(maxWayNodeBufIpix);
-      //     const auto maxBufIt = wayNodePartitions.find(maxWayNodeBufIpix);
-
-      //     if (fileIt == pixelWayFiles.end() ||
-      //         maxBufIt == wayNodePartitions.end()) {
-      //       std::cerr << maxBufIpix << std::endl;
-      //       std::cerr << "No pixels found" << std::endl;
-      //       return 1;
-      //     }
-
-      //     get<3>(fileIt->second) +=
-      //         sizeof(google::protobuf::int64) * maxBufIt->second.size();
-
-      //     if (ftruncate(get<2>(fileIt->second), get<3>(fileIt->second)) ==
-      //     -1) {
-      //       std::cerr << "failed to alloc memory for ways";
-      //       return 1;
-      //     }
-      //     void* map =
-      //         mmap(nullptr, get<3>(fileIt->second), PROT_READ | PROT_WRITE,
-      //              MAP_SHARED, get<2>(fileIt->second), 0);
-
-      //     if (map == MAP_FAILED) {
-      //       std::cerr << "Failed mapping geo-parts file" << std::endl;
-      //       return 1;
-      //     }
-      //     std::memcpy(
-      //         static_cast<char*>(map) + get<3>(fileIt->second) -
-      //             sizeof(google::protobuf::int64) * maxBufIt->second.size(),
-      //         maxBufIt->second.data(),
-      //         sizeof(google::protobuf::int64) * maxBufIt->second.size());
-      //     if (munmap(map, get<3>(fileIt->second)) == -1) {
-      //       throw std::runtime_error("Failed to unmap ways file");
-      //     }
-      //     wayNodeBufSizesSum -= maxBufIt->second.size();
-      //     maxBufIt->second.clear();
-
-      //     maxWayNodeBufSize = 0;
-      //     maxWayNodeBufIpix = -1;
-
-      //     for (const auto& [ipix, buf] : wayNodePartitions) {
-      //       if (buf.size() >= maxWayNodeBufSize) {
-      //         maxWayNodeBufSize = buf.size();
-      //         maxWayNodeBufIpix = ipix;
-      //       }
-      //     }
-      //   }
-      // }
     }
 
     if (munmap(gp_map, gp_size) == -1) {
@@ -1677,47 +1410,15 @@ int main(int argc, char* argv[]) {
 
   edgePartitions.clear();
 
-  // for (auto& [ipix, buf] : wayNodePartitions) {
-  //   auto fileIt = pixelWayFiles.find(ipix);
-
-  //   if (fileIt == pixelWayFiles.end()) {
-  //     std::cerr << maxBufIpix << std::endl;
-  //     std::cerr << "No pixels found" << std::endl;
-  //     return 1;
-  //   }
-
-  //   get<3>(fileIt->second) += sizeof(google::protobuf::int64) * buf.size();
-
-  //   if (ftruncate(get<2>(fileIt->second), get<3>(fileIt->second)) == -1) {
-  //     std::cerr << "failed to alloc memory for ways";
-  //     return 1;
-  //   }
-  //   void* map = mmap(nullptr, get<3>(fileIt->second), PROT_READ | PROT_WRITE,
-  //                    MAP_SHARED, get<2>(fileIt->second), 0);
-
-  //   if (map == MAP_FAILED) {
-  //     std::cerr << "Failed mapping geo-parts file" << std::endl;
-  //     return 1;
-  //   }
-  //   std::memcpy(static_cast<char*>(map) + get<3>(fileIt->second) -
-  //                   sizeof(google::protobuf::int64) * buf.size(),
-  //               buf.data(), sizeof(google::protobuf::int64) * buf.size());
-  //   if (munmap(map, get<3>(fileIt->second)) == -1) {
-  //     throw std::runtime_error("Failed to unmap ways file");
-  //   }
-  //   buf.clear();
-  // }
-
-  // wayPartitions.clear();
-  // wayNodePartitions.clear();
   pixelWayFiles.clear();
 
   std::cerr << "Border nodes: " << borderNodes.size() << std::endl;
 
   std::cerr << "Partitioned edges" << std::endl;
-  // std::cerr << "Border ways: " << borderWays.size() << std::endl;
 
   fd_rests = open("./bin/restrictions.bin", O_RDONLY);
+
+  unlink("./bin/restrictions.bin");
 
   struct stat sb_r;
   if (fstat(fd_rests, &sb_r) == -1) {
@@ -1726,7 +1427,8 @@ int main(int argc, char* argv[]) {
   }
   rests_size = sb_r.st_size;
 
-  map_rests = mmap(nullptr, rests_size, PROT_READ, MAP_PRIVATE, fd_rests, 0);
+  void* map_rests =
+      mmap(nullptr, rests_size, PROT_READ, MAP_PRIVATE, fd_rests, 0);
 
   if (map_rests == MAP_FAILED) {
     close(fd_rests);
@@ -1905,94 +1607,6 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  // std::vector<parser::BorderEdge> borderEdges;
-  // borderEdges.reserve(borderWays.size());
-  // google::protobuf::int64 edgeId = 0;
-
-  // // process border ways / restrictions
-  // for (auto& way : borderWays) {
-  //   if (way.nodes.size() == 0) {
-  //     continue;
-  //   }
-
-  //   auto sourceIpix = way.nodes[0].first;
-  //   const auto sourceNodeHtIt = nodeHTs.find(sourceIpix);
-
-  //   if (sourceNodeHtIt == nodeHTs.end()) {
-  //     std::cerr << sourceIpix << std::endl;
-  //     throw std::runtime_error("No ht for source node");
-  //   }
-
-  //   auto sourcePairIt = sourceNodeHtIt->second.find(way.nodes[0].second[0]);
-  //   if (sourcePairIt == sourceNodeHtIt->second.end()) {
-  //     throw std::runtime_error("Node is missing 1");
-  //   }
-  //   auto sourceNodePtr = sourcePairIt->second;
-  //   auto prevNodePtr = sourceNodePtr;
-
-  //   double cost = 0;
-
-  //   for (uint64_t i = 0; i < way.nodes.size(); i++) {
-  //     const auto nodeHtIt = nodeHTs.find(way.nodes[i].first);
-  //     if (nodeHtIt == nodeHTs.end()) {
-  //       throw std::runtime_error("No ht for this partition");
-  //     }
-
-  //     for (uint64_t j = (i == 0 ? 1 : 0); j < way.nodes[i].second.size();
-  //     j++) {
-  //       const auto nodeIt = nodeHtIt->second.find(way.nodes[i].second[j]);
-
-  //       if (nodeIt == nodeHtIt->second.end()) {
-  //         throw std::runtime_error("Node is missing 2");
-  //       }
-
-  //       auto& nodePtr = nodeIt->second;
-
-  //       cost += geopointsDistance(
-  //           std::make_pair(prevNodePtr->lat, prevNodePtr->lon),
-  //           std::make_pair(nodePtr->lat, nodePtr->lon));
-
-  //       prevNodePtr = nodePtr;
-
-  //       if (nodePtr->used <= 1) {
-  //         continue;
-  //       }
-
-  //       borderEdges.emplace_back(edgeId, &way, sourceNodePtr, nodePtr, cost);
-
-  //       if (!way.oneway) {
-  //         edgeId++;
-  //         borderEdges.emplace_back(edgeId, &way, nodePtr, sourceNodePtr,
-  //         cost);
-  //       }
-
-  //       sourceNodePtr = nodePtr;
-  //       cost = 0;
-  //       edgeId++;
-  //     }
-  //   }
-  // }
-
-  // std::cerr << "Border Edges: " << borderEdges.size() << std::endl;
-
-  // std::unordered_map<google::protobuf::int64,
-  // std::vector<parser::BorderEdge*>>
-  //     borderGraph;
-
-  // for (auto& edge : borderEdges) {
-  //   auto entryIt = borderGraph.find(edge.sourceNodePtr->id);
-  //   if (entryIt == borderGraph.end()) {
-  //     auto vecIt = borderGraph
-  //                      .emplace(std::piecewise_construct,
-  //                               std::forward_as_tuple(edge.sourceNodePtr->id),
-  //                               std::forward_as_tuple())
-  //                      .first;
-  //     vecIt->second.push_back(&edge);
-  //   } else {
-  //     entryIt->second.push_back(&edge);
-  //   }
-  // }
-
   // Open fds (read-only) for node and way geo-partitions
   std::unordered_map<uint32_t, std::tuple<int, int>> geoPartFds;
 
@@ -2007,6 +1621,8 @@ int main(int argc, char* argv[]) {
       return 1;
     }
 
+    unlink(filename_n.data());
+
     std::ostringstream stream2;
     stream2 << "./bin/geo-partitions/edges/edges-" << std::to_string(ipix)
             << ".bin";
@@ -2017,15 +1633,7 @@ int main(int argc, char* argv[]) {
       return 1;
     }
 
-    // std::ostringstream stream3;
-    // stream3 << "./bin/geo-partitions/way-nodes/way-nodes-"
-    //         << std::to_string(ipix) << ".bin";
-    // std::string filename_wn = stream3.str();
-    // int fd_wn = open(filename_wn.data(), O_RDONLY);
-    // if (fd_wn == -1) {
-    //   std::cerr << "Failed to open file.\n";
-    //   return 1;
-    // }
+    unlink(filename_e.data());
 
     geoPartFds.emplace(std::piecewise_construct, std::forward_as_tuple(ipix),
                        std::forward_as_tuple(fd_n, fd_e));
@@ -2056,21 +1664,9 @@ int main(int argc, char* argv[]) {
 
     if (map_n == MAP_FAILED) {
       close(get<0>(fdsIt->second));
-      std::cerr << "NODES" << std::endl;
       throw std::runtime_error("Failed mapping");
     }
     close(get<0>(fdsIt->second));
-
-    // size_t nodeCount = size_n / sizeof(parser::Node);
-
-    // // Hash nodes
-    // ska::flat_hash_map<google::protobuf::int64, uint64_t> nodeHashTable;
-    // for (uint64_t i = 0; i < nodeCount; i++) {
-    //   parser::Node* nodePtr = reinterpret_cast<parser::Node*>(
-    //       static_cast<char*>(map_n) + i * sizeof(parser::Node));
-
-    //   nodeHashTable.emplace(nodePtr->id, i);
-    // }
 
     // open file with ways in this partition
     struct stat sb_e;
@@ -2089,77 +1685,11 @@ int main(int argc, char* argv[]) {
 
     if (map_e == MAP_FAILED) {
       close(get<1>(fdsIt->second));
-      std::cerr << "WAYS" << std::endl;
       throw std::runtime_error("Failed mapping");
     }
     close(get<1>(fdsIt->second));
 
     size_t edgeCount = size_e / sizeof(parser::Edge);
-
-    // open way-nodes in this partition
-    // struct stat sb_wn;
-    // if (fstat(get<2>(fdsIt->second), &sb_wn) == -1) {
-    //   close(get<2>(fdsIt->second));
-    //   throw std::runtime_error("Failed to obtain file size");
-    // }
-    // size_t size_wn = sb_wn.st_size;
-
-    // void* map_wn = mmap(nullptr, size_wn, PROT_READ, MAP_PRIVATE,
-    //                     get<2>(fdsIt->second), 0);
-
-    // if (map_wn == MAP_FAILED) {
-    //   close(get<2>(fdsIt->second));
-    //   std::cerr << "WAY NODES" << std::endl;
-    //   throw std::runtime_error("Failed mapping");
-    // }
-    // close(get<2>(fdsIt->second));
-
-    // std::vector<parser::Edge> edgesBuf;
-    // edgesBuf.reserve(wayCount);
-
-    // parser::waysToEdges(
-    //     reinterpret_cast<DiskWay*>(static_cast<char*>(map_w)), wayCount,
-    //     reinterpret_cast<google::protobuf::int64*>(static_cast<char*>(map_wn)),
-    //     reinterpret_cast<parser::Node*>(static_cast<char*>(map_n)),
-    //     nodeHashTable, edgesBuf, edgeId);
-
-    // if (munmap(map_w, size_w) == -1) {
-    //   std::cerr << "Failed unmapping node file" << std::endl;
-    //   return 1;
-    // }
-    // if (munmap(map_wn, size_wn) == -1) {
-    //   std::cerr << "Failed unmapping node file" << std::endl;
-    //   return 1;
-    // }
-    // nodeHashTable.clear();
-
-    // std::ostringstream stream;
-    // stream << "./bin/geo-partitions/edges/edges-" << std::to_string(ipix)
-    //        << ".bin";
-    // std::string filename = stream.str();
-    // int fd =
-    //     open(filename.data(), O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
-    // if (fd == -1) {
-    //   std::cerr << "Failed to open file.\n";
-    //   return -1;
-    // }
-    // if (ftruncate(fd, edgesBuf.size() * sizeof(parser::Edge)) == -1) {
-    //   std::cerr << "failed to alloc memory for edges";
-    //   return 1;
-    // }
-    // void* map_e = mmap(nullptr, edgesBuf.size() * sizeof(parser::Edge),
-    //                    PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-
-    // if (map_e == MAP_FAILED) {
-    //   std::cerr << "Failed mapping edges file" << std::endl;
-    //   return 1;
-    // }
-    // std::memcpy(static_cast<char*>(map_e), edgesBuf.data(),
-    //             sizeof(parser::Edge) * edgesBuf.size());
-    // if (munmap(map_e, sizeof(parser::Edge) * edgesBuf.size()) == -1) {
-    //   throw std::runtime_error("Failed to unmap ways file");
-    // }
-    // close(fd);
 
     std::vector<parser::ExpandedEdge> expEdgesBuf;
 
@@ -2175,18 +1705,6 @@ int main(int argc, char* argv[]) {
           onlyRestrictionsMap, noRestrictionsHash, expEdgeId, expEdgesBuf);
     }
 
-    // if (munmap(map_n, size_n) == -1) {
-    //   std::cerr << "Failed unmapping nodes" << std::endl;
-    //   return 1;
-    // }
-
-    // if (munmap(map_e, size_e) == -1) {
-    //   std::cerr << "Failed unmapping edges" << std::endl;
-    //   return 1;
-    // }
-
-    // edgesBuf.clear();
-
     for (auto& edge : borderEdges) {
       parser::graph::invert::applyRestrictionsSourceBorder(
           &edge, graph.graph(),
@@ -2194,8 +1712,6 @@ int main(int argc, char* argv[]) {
           borderNodes.data(), onlyRestrictionsMap, noRestrictionsHash,
           expEdgeId, expEdgesBuf);
     }
-
-    // graph.graph().clear();
 
     for (uint64_t j = 0; j < edgeCount; j++) {
       auto edgePtr = reinterpret_cast<parser::Edge*>(static_cast<char*>(map_e) +
@@ -2252,131 +1768,10 @@ int main(int argc, char* argv[]) {
     }
     close(fd_ee);
 
-    // std::cerr << "Exp. Edges: " << expEdgesBuf.size() << std::endl;
     sum += expEdgesBuf.size();
   }
 
   geoPartFds.clear();
-
-  // for (auto& [ipix, buf] : edgePartitions) {
-  //   graphs.emplace(std::piecewise_construct, std::forward_as_tuple(ipix),
-  //                  std::forward_as_tuple(buf));
-  // }
-
-  // for (const auto ipix : pixels) {
-  //   const auto edgesIt = edgePartitions.find(ipix);
-
-  //   const auto graphIt = graphs.find(ipix);
-
-  //   if (graphIt == graphs.end() || edgesIt == edgePartitions.end()) {
-  //     continue;
-  //   }
-
-  //   const auto expEdgesIt =
-  //       expEdgePartitions
-  //           .emplace(std::piecewise_construct, std::forward_as_tuple(ipix),
-  //                    std::forward_as_tuple())
-  //           .first;
-  //   auto& expEdgesBuf = expEdgesIt->second;
-
-  //   graphIt->second.invert(edgesIt->second, onlyRestrictionsMap,
-  //                          noRestrictionsHash, expEdgesBuf);
-  // }
-
-  // uint64_t sum = 0;
-  // for (const auto& [_, buf] : expEdgePartitions) {
-  //   sum += buf.size();
-  // }
-
-  // std::vector<parser::BorderEdge> borderEdges;
-  // borderEdges.reserve(borderWays.size());
-  // google::protobuf::int64 edgeId = 0;
-
-  // // process border ways / restrictions
-  // for (auto& way : borderWays) {
-  //   if (way.nodes.size() == 0) {
-  //     continue;
-  //   }
-
-  //   auto sourceIpix = way.nodes[0].first;
-  //   const auto sourceNodeHtIt = nodeHTs.find(sourceIpix);
-
-  //   if (sourceNodeHtIt == nodeHTs.end()) {
-  //     std::cerr << sourceIpix << std::endl;
-  //     throw std::runtime_error("No ht for source node");
-  //   }
-
-  //   auto sourcePairIt =
-  //   sourceNodeHtIt->second.find(way.nodes[0].second[0]); if (sourcePairIt
-  //   == sourceNodeHtIt->second.end()) {
-  //     throw std::runtime_error("Node is missing 1");
-  //   }
-  //   auto sourceNodePtr = sourcePairIt->second;
-  //   auto prevNodePtr = sourceNodePtr;
-
-  //   double cost = 0;
-
-  //   for (uint64_t i = 0; i < way.nodes.size(); i++) {
-  //     const auto nodeHtIt = nodeHTs.find(way.nodes[i].first);
-  //     if (nodeHtIt == nodeHTs.end()) {
-  //       throw std::runtime_error("No ht for this partition");
-  //     }
-
-  //     for (uint64_t j = (i == 0 ? 1 : 0); j < way.nodes[i].second.size();
-  //     j++) {
-  //       const auto nodeIt = nodeHtIt->second.find(way.nodes[i].second[j]);
-
-  //       if (nodeIt == nodeHtIt->second.end()) {
-  //         throw std::runtime_error("Node is missing 2");
-  //       }
-
-  //       auto& nodePtr = nodeIt->second;
-
-  //       cost += geopointsDistance(
-  //           std::make_pair(prevNodePtr->lat, prevNodePtr->lon),
-  //           std::make_pair(nodePtr->lat, nodePtr->lon));
-
-  //       prevNodePtr = nodePtr;
-
-  //       if (nodePtr->used <= 1) {
-  //         continue;
-  //       }
-
-  //       borderEdges.emplace_back(edgeId, &way, sourceNodePtr, nodePtr,
-  //       cost);
-
-  //       if (!way.oneway) {
-  //         edgeId++;
-  //         borderEdges.emplace_back(edgeId, &way, nodePtr, sourceNodePtr,
-  //         cost);
-  //       }
-
-  //       sourceNodePtr = nodePtr;
-  //       cost = 0;
-  //       edgeId++;
-  //     }
-  //   }
-  // }
-
-  // std::cerr << "Border Edges: " << borderEdges.size() << std::endl;
-
-  // std::unordered_map<google::protobuf::int64,
-  // std::vector<parser::BorderEdge*>>
-  //     borderGraph;
-
-  // for (auto& edge : borderEdges) {
-  //   auto entryIt = borderGraph.find(edge.sourceNodePtr->id);
-  //   if (entryIt == borderGraph.end()) {
-  //     auto vecIt = borderGraph
-  //                      .emplace(std::piecewise_construct,
-  //                               std::forward_as_tuple(edge.sourceNodePtr->id),
-  //                               std::forward_as_tuple())
-  //                      .first;
-  //     vecIt->second.push_back(&edge);
-  //   } else {
-  //     entryIt->second.push_back(&edge);
-  //   }
-  // }
 
   std::vector<parser::ExpandedEdge> borderExpEdges;
 
@@ -2388,6 +1783,21 @@ int main(int argc, char* argv[]) {
 
   std::cerr << "Total expanded edges: " << sum + borderExpEdges.size()
             << std::endl;
+
+  for (uint32_t ipix : usedPixels) {
+    std::ostringstream stream;
+    stream << "./bin/geo-partitions/exp-edges/exp-edges-"
+           << std::to_string(ipix) << ".bin";
+    std::string filename = stream.str();
+    int fd = open(filename.data(), O_RDONLY);
+    if (fd == -1) {
+      std::cerr << "Failed to open file.\n";
+      return 1;
+    }
+
+    unlink(filename.data());
+    close(fd);
+  }
 
   auto end = std::chrono::high_resolution_clock::now();
   auto duration =
