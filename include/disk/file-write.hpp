@@ -1,48 +1,57 @@
+#pragma once
+
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include <stdexcept>
+#include <vector>
 
 template <typename T>
-struct FileRead {
+struct FileWrite {
  public:
-  FileWrite(int fd) : fd(fd) {
+  FileWrite(int fd, uint64_t maxChunkSize)
+      : fd(fd), maxChunkSize(maxChunkSize), size(0) {
     if (fd == -1) {
       throw std::runtime_error("Failed opening file");
     }
+    buffer.reserve(maxChunkSize);
   }
 
-  void* mmap_file() {
-    struct stat sb;
-    if (fstat(fd, &sb) == -1) {
-      throw std::runtime_error("Failed obtaning file size");
+  void add(T obj) {
+    buffer.push_back(obj);
+    if (buffer.size() * sizeof(T) >= maxChunkSize) {
+      flush();
     }
-
-    size = sb.st_size;
-
-    void* map_temp = mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
-    if (map_temp == MAP_FAILED) {
-      throw std::runtime_error("Failed mapping");
-    };
-
-    map = map_temp;
   }
 
-  void unmap_file() {
+  void flush() {
+    size += sizeof(T) * buffer.size();
+
+    if (ftruncate(fd, size) == -1) {
+      throw std::runtime_error("Failed to truncate memory");
+    }
+    void* map = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (map == MAP_FAILED) {
+      throw std::runtime_error("Failed mapping a file");
+    }
+    std::memcpy(static_cast<char*>(map) + size - sizeof(T) * buffer.size(),
+                buffer.data(), sizeof(T) * buffer.size());
     if (munmap(map, size) == -1) {
-      throw std::runtime_error("Failed unmapping file");
+      throw std::runtime_error("Failed to unmap file");
     }
-    map = (void*)-1;
+    buffer.clear();
   }
+
+  uint64_t sizeAfterFlush() { return size + sizeof(T) * buffer.size(); }
+
+  uint64_t fsize() { return size; }
 
   void close_fd() { close(fd); }
 
-  const char* eof() { return static_cast<const char*>(map) + size; }
-
  private:
   int fd;
-  void* map;
-  size_t size;
-  std::
+  uint64_t maxChunkSize;
+  std::vector<T> buffer;
+  uint64_t size;
 };

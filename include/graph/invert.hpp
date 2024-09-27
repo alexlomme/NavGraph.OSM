@@ -1,5 +1,6 @@
 #include <osmpbf/osmformat.pb.h>
 
+#include <disk/file-write.hpp>
 #include <types/expanded-edge.hpp>
 #include <types/relation.hpp>
 #include <unordered_map>
@@ -21,7 +22,7 @@ void applyRestrictions(
         std::tuple<google::protobuf::int64, google::protobuf::int64>,
         parser::Restriction*>& noRestrictionsHash,
     google::protobuf::int64& expandedEdgeId,
-    std::vector<parser::ExpandedEdge>& expEdgesBuffer) {
+    FileWrite<parser::ExpandedEdge>& expEdgesFileWrite) {
   auto viaNodeId = sourceEdge->targetNodeId;
   auto graphNodePairIt = graph.find(viaNodeId);
 
@@ -78,7 +79,7 @@ void applyRestrictions(
       if (forbidRestPairIt != noRestrictionsHash.end()) {
         return;
       }
-      expEdgesBuffer.push_back(parser::ExpandedEdge{
+      expEdgesFileWrite.add(parser::ExpandedEdge{
           expandedEdgeId, sourceEdge->id, 0, (*targetEdgePtrIt)->id, 0,
           (sourceEdge->cost + (*targetEdgePtrIt)->cost) / 2, 0});
       expandedEdgeId++;
@@ -110,11 +111,7 @@ void applyRestrictions(
       continue;
     }
 
-    // expEdgesBuffer.push_back(parser::ExpandedEdge{
-    //     expandedEdgeId, sourceEdge.sourceNodePtr, sourceEdge.targetNodePtr,
-    //     targetEdge.sourceNodePtr, targetEdge.targetNodePtr,
-    //     (sourceEdge.cost + targetEdge.cost) / 2});
-    expEdgesBuffer.push_back(
+    expEdgesFileWrite.add(
         parser::ExpandedEdge{expandedEdgeId, sourceEdge->id, 0, targetEdge.id,
                              0, (sourceEdge->cost + targetEdge.cost) / 2, 0});
 
