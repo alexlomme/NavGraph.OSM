@@ -13,7 +13,7 @@ struct FileWrite {
   FileWrite(int fd, uint64_t maxChunkSize)
       : fd(fd), maxChunkSize(maxChunkSize), size(0) {
     if (fd == -1) {
-      throw std::runtime_error("Failed opening file");
+      throw std::runtime_error("Failed opening file for writing");
     }
     buffer.reserve(maxChunkSize);
   }
@@ -29,6 +29,7 @@ struct FileWrite {
     size += sizeof(T) * buffer.size();
 
     if (ftruncate(fd, size) == -1) {
+      std::cerr << "Size for truncation: " << size << std::endl;
       throw std::runtime_error("Failed to truncate memory");
     }
     void* map = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);

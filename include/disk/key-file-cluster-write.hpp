@@ -18,7 +18,7 @@ struct KeyFileClusterWrite {
       : maxBufSizesSum(maxBufSizesSum) {
     for (const auto& [key, fd] : file_fds) {
       if (fd == -1) {
-        throw std::runtime_error("Failed opening file");
+        throw std::runtime_error("Failed opening file for writing (cluster)");
       }
       filesMap.emplace(key, std::make_pair(fd, 0));
       buffers.emplace(std::piecewise_construct, std::forward_as_tuple(key),

@@ -10,7 +10,7 @@ struct FileRead {
  public:
   FileRead(int fd) : fd(fd) {
     if (fd == -1) {
-      throw std::runtime_error("Failed opening file");
+      throw std::runtime_error("Failed opening file for reading");
     }
     struct stat sb;
     if (fstat(fd, &sb) == -1) {
@@ -20,13 +20,9 @@ struct FileRead {
   }
 
   void* mmap_file() {
-    // struct stat sb;
-    // if (fstat(fd, &sb) == -1) {
-    //   throw std::runtime_error("Failed obtaning file size");
-    // }
-    // size = sb.st_size;
     void* map_temp = mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
     if (map_temp == MAP_FAILED) {
+      std::cerr << size << std::endl;
       throw std::runtime_error("Failed mapping");
     };
 
@@ -36,19 +32,12 @@ struct FileRead {
 
   void unmap_file() {
     if (munmap(map, size) == -1) {
-      throw std::runtime_error("Failed unmapping file");
+      throw std::runtime_error("Failed unmapping file for reading");
     }
     map = (void*)-1;
   }
 
-  size_t fsize() {
-    // struct stat sb;
-    // if (fstat(fd, &sb) == -1) {
-    //   throw std::runtime_error("Failed obtaning file size");
-    // }
-    // return sb.st_size;
-    return size;
-  }
+  size_t fsize() { return size; }
 
   void close_fd() { close(fd); }
 
