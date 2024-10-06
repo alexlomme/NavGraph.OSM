@@ -593,208 +593,154 @@ int main(int argc, char* argv[]) {
 
   std::mutex nodesClusterMutex;
 
-  std::vector<FileWrite<std::tuple<uint64_t, double, double, uint64_t>>>
-      tupleFiles;
+  for (uint16_t i = 0; i < HASH_PARTITIONS_NUM; i++) {
+    auto hashPartitionStart = std::chrono::high_resolution_clock::now();
 
-  for (uint64_t i = 0; i < HASH_PARTITIONS_NUM; i++) {
+    std::string rn_fn = numFilename(
+        "./bin/node-hash-partitions/reduced-nodes/nodes-", i, "bin");
+    int rn_fd =
+        open(rn_fn.data(), O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+    FileWrite<WayHashedNode> rnFile(
+        rn_fd, MAX_REDUCED_NODES_BUF_SIZE * sizeof(WayHashedNode));
+
+    std::string un_fn = numFilename(
+        "./bin/node-hash-partitions/used-nodes/used-nodes-", i, "bin");
+    int un_fd = open(un_fn.data(), O_RDONLY);
+    FileRead unFileRead(un_fd);
+
+    void* un_map = unFileRead.mmap_file();
+
+    uint64_t usedNodesCount =
+        unFileRead.fsize() / sizeof(google::protobuf::int64);
+    unFileRead.close_fd();
+
+    ska::flat_hash_map<google::protobuf::int64, uint16_t> usedNodes;
+
+    for (uint64_t j = 0; j < usedNodesCount; j++) {
+      google::protobuf::int64* un = reinterpret_cast<google::protobuf::int64*>(
+          static_cast<char*>(un_map) + j * sizeof(google::protobuf::int64));
+
+      google::protobuf::int64 id = *un > 0 ? *un : -(*un);
+
+      const auto unIt = usedNodes.find(id);
+
+      if (unIt == usedNodes.end()) {
+        usedNodes.emplace(id, *un < 0 ? 2 : 1);
+      } else {
+        unIt->second += *un < 0 ? 2 : 1;
+      }
+    }
+
+    unFileRead.unmap_file();
+
+    std::string filename =
+        numFilename("./bin/node-hash-partitions/nodes/nodes-", i, "bin");
+    int fd_part = open(filename.data(), O_RDONLY);
+    FileRead nodesFile(fd_part);
+    unlink(filename.data());
+
+    void* n_map = nodesFile.mmap_file();
+
+    uint64_t nodesCount = nodesFile.fsize() / sizeof(DiskNode);
+    nodesFile.close_fd();
+
+    for (uint64_t j = 0; j < nodesCount; j++) {
+      DiskNode* n = reinterpret_cast<DiskNode*>(static_cast<char*>(n_map) +
+                                                j * sizeof(DiskNode));
+      const auto usedNodePairIt = usedNodes.find(n->id);
+      if (usedNodePairIt == usedNodes.end()) {
+        continue;
+      }
+      auto theta = (90 - n->lat) * M_PI / 180;
+      auto phi = n->lon * M_PI / 180;
+
+      long ipix;
+
+      ang2pix_ring(50, theta, phi, &ipix);
+
+      usedPixels.insert(ipix);
+
+      std::unordered_map<long, uint64_t>::iterator offsetIt;
+
+      nodePartsCluster.add(
+          ipix, parser::Node{n->id, n->lat, n->lon, usedNodePairIt->second});
+
+      offsetIt = nodeOffsets.find(ipix);
+      if (offsetIt == nodeOffsets.end()) {
+        offsetIt = nodeOffsets.emplace(ipix, 0).first;
+      } else {
+        offsetIt->second++;
+      }
+
+      rnFile.add(WayHashedNode{n->id, n->lat, n->lon, usedNodePairIt->second,
+                               offsetIt->second});
+    }
+    nodesFile.unmap_file();
+    rnFile.flush();
+    rnFile.close_fd();
+
+    usedNodes.clear();
+
+    rn_fd = open(rn_fn.data(), O_RDONLY);
+    FileRead rnFileRead(rn_fd);
+    unlink(rn_fn.data());
+
+    void* map_rn = rnFileRead.mmap_file();
+
+    uint64_t reducedNodesCount = rnFileRead.fsize() / sizeof(WayHashedNode);
+    rnFileRead.close_fd();
+
+    ska::flat_hash_map<google::protobuf::int64, WayHashedNode*> nodesHash;
+
+    for (uint64_t j = 0; j < reducedNodesCount; j++) {
+      WayHashedNode* n = reinterpret_cast<WayHashedNode*>(
+          static_cast<char*>(map_rn) + j * sizeof(WayHashedNode));
+
+      nodesHash.emplace(n->id, n);
+    }
+
     std::string tuples_filename = numFilename(
         "./bin/node-hash-partitions/way-node-tuples/tuples-", i, "bin");
-    int fd = open(tuples_filename.data(), O_RDWR | O_CREAT | O_TRUNC,
-                  S_IRUSR | S_IWUSR);
-    tupleFiles.emplace_back(fd, MAX_HASH_TUPLES_BUF_SIZE);
+    int tuples_fd = open(tuples_filename.data(), O_RDWR | O_CREAT | O_TRUNC,
+                         S_IRUSR | S_IWUSR);
+
+    FileWrite<std::tuple<uint64_t, double, double, uint64_t>> tupleFileWrite(
+        tuples_fd, MAX_HASH_TUPLES_BUF_SIZE);
+
+    un_fd = open(un_fn.data(), O_RDONLY);
+    FileRead unFileRead2(un_fd);
+    unlink(un_fn.data());
+    un_map = unFileRead2.mmap_file();
+
+    usedNodesCount = unFileRead2.fsize() / sizeof(google::protobuf::int64);
+
+    unFileRead2.close_fd();
+
+    for (uint64_t j = 0; j < usedNodesCount; j++) {
+      google::protobuf::int64* n = reinterpret_cast<google::protobuf::int64*>(
+          static_cast<char*>(un_map) + j * sizeof(google::protobuf::int64));
+
+      auto id = *n > 0 ? *n : -(*n);
+
+      const auto nodeIt = nodesHash.find(id);
+
+      if (nodeIt == nodesHash.end()) {
+        throw std::runtime_error("no node found for used node");
+      }
+
+      tupleFileWrite.add(
+          std::make_tuple(nodeIt->second->offset, nodeIt->second->lat,
+                          nodeIt->second->lon, nodeIt->second->used));
+    }
+    nodesHash.clear();
+    tupleFileWrite.flush();
+    tupleFileWrite.close_fd();
+
+    unFileRead2.unmap_file();
+    rnFileRead.unmap_file();
   }
 
-  tbb::parallel_for(
-      tbb::blocked_range<uint64_t>(0ull, HASH_PARTITIONS_NUM),
-      [&](auto& range) {
-        for (uint16_t i = range.begin(); i != range.end(); i++) {
-          std::cerr << "Hash partition processed: " << i << std::endl;
-          auto hashPartitionStart = std::chrono::high_resolution_clock::now();
-
-          // std::string rn_fn = numFilename(
-          //     "./bin/node-hash-partitions/reduced-nodes/nodes-", i, "bin");
-          // int rn_fd =
-          //     open(rn_fn.data(), O_RDWR | O_CREAT | O_TRUNC, S_IRUSR |
-          //     S_IWUSR);
-          // FileWrite<WayHashedNode> rnFile(
-          //     rn_fd, MAX_REDUCED_NODES_BUF_SIZE * sizeof(WayHashedNode));
-
-          std::string un_fn = numFilename(
-              "./bin/node-hash-partitions/used-nodes/used-nodes-", i, "bin");
-          int un_fd = open(un_fn.data(), O_RDONLY);
-          FileRead unFileRead(un_fd);
-
-          void* un_map = unFileRead.mmap_file();
-
-          std::cerr << "Mapped used-nodes file in partition: " << i
-                    << std::endl;
-
-          uint64_t usedNodesCount =
-              unFileRead.fsize() / sizeof(google::protobuf::int64);
-          unFileRead.close_fd();
-
-          ska::flat_hash_map<google::protobuf::int64, uint16_t> usedNodes;
-
-          for (uint64_t j = 0; j < usedNodesCount; j++) {
-            google::protobuf::int64* un =
-                reinterpret_cast<google::protobuf::int64*>(
-                    static_cast<char*>(un_map) +
-                    j * sizeof(google::protobuf::int64));
-
-            google::protobuf::int64 id = *un > 0 ? *un : -(*un);
-
-            const auto unIt = usedNodes.find(id);
-
-            if (unIt == usedNodes.end()) {
-              usedNodes.emplace(id, *un < 0 ? 2 : 1);
-            } else {
-              unIt->second += *un < 0 ? 2 : 1;
-            }
-          }
-
-          std::cerr << "Generated used nodes hashtable in partition: " << i
-                    << std::endl;
-
-          // unFileRead.unmap_file();
-
-          std::string filename =
-              numFilename("./bin/node-hash-partitions/nodes/nodes-", i, "bin");
-          int fd_part = open(filename.data(), O_RDONLY);
-          FileRead nodesFile(fd_part);
-          unlink(filename.data());
-
-          void* n_map = nodesFile.mmap_file();
-
-          std::cerr << "Nodes mapped in partition: " << i << std::endl;
-
-          uint64_t nodesCount = nodesFile.fsize() / sizeof(DiskNode);
-          nodesFile.close_fd();
-
-          std::vector<WayHashedNode> reducedNodes;
-          reducedNodes.reserve(usedNodes.size());
-
-          for (uint64_t j = 0; j < nodesCount; j++) {
-            DiskNode* n = reinterpret_cast<DiskNode*>(
-                static_cast<char*>(n_map) + j * sizeof(DiskNode));
-            const auto usedNodePairIt = usedNodes.find(n->id);
-            if (usedNodePairIt == usedNodes.end()) {
-              continue;
-            }
-            auto theta = (90 - n->lat) * M_PI / 180;
-            auto phi = n->lon * M_PI / 180;
-
-            long ipix;
-
-            ang2pix_ring(50, theta, phi, &ipix);
-
-            usedPixels.insert(ipix);
-
-            std::unordered_map<uint32_t, uint64_t>::iterator offsetIt;
-
-            {
-              std::unique_lock<std::mutex> lock(nodesClusterMutex);
-              nodePartsCluster.add(ipix, parser::Node{n->id, n->lat, n->lon,
-                                                      usedNodePairIt->second});
-
-              // offsetIt = nodeOffsets.find(ipix);
-              // if (offsetIt == nodeOffsets.end()) {
-              //   offsetIt = nodeOffsets.emplace(ipix, 0).first;
-              // } else {
-              //   offsetIt->second++;
-              // }
-            }
-
-            reducedNodes.push_back(WayHashedNode{n->id, n->lat, n->lon,
-                                                 usedNodePairIt->second, 0});
-
-            // rnFile.add(WayHashedNode{n->id, n->lat, n->lon,
-            //                          usedNodePairIt->second,
-            //                          offsetIt->second});
-          }
-
-          std::cerr << "Filtered nodes in partition: " << i << std::endl;
-
-          nodesFile.unmap_file();
-          // rnFile.flush();
-          // rnFile.close_fd();
-
-          usedNodes.clear();
-
-          // rn_fd = open(rn_fn.data(), O_RDONLY);
-          // FileRead rnFileRead(rn_fd);
-          // unlink(rn_fn.data());
-
-          // void* map_rn = rnFileRead.mmap_file();
-
-          // uint64_t reducedNodesCount = rnFileRead.fsize() /
-          // sizeof(WayHashedNode); rnFileRead.close_fd();
-
-          ska::flat_hash_map<google::protobuf::int64, WayHashedNode*> nodesHash;
-
-          for (uint64_t j = 0; j < reducedNodes.size(); j++) {
-            // WayHashedNode* n = reinterpret_cast<WayHashedNode*>(
-            //     static_cast<char*>(map_rn) + j * sizeof(WayHashedNode));
-            WayHashedNode* n = &reducedNodes[j];
-
-            nodesHash.emplace(n->id, n);
-          }
-
-          std::cerr << "Hashed node in partition: " << i << std::endl;
-
-          // std::string tuples_filename = numFilename(
-          //     "./bin/node-hash-partitions/way-node-tuples/tuples-", i,
-          //     "bin");
-          // int tuples_fd = open(tuples_filename.data(),
-          //                      O_RDWR | O_CREAT | O_TRUNC, S_IRUSR |
-          //                      S_IWUSR);
-
-          // std::cerr << "Tuples fd " << tuples_fd << " in partition: " << i
-          //           << std::endl;
-          // FileWrite<std::tuple<uint64_t, double, double, uint64_t>>
-          //     tupleFileWrite(tuples_fd, MAX_HASH_TUPLES_BUF_SIZE);
-          auto& tupleFileWrite = tupleFiles[i];
-
-          // un_fd = open(un_fn.data(), O_RDONLY);
-          // FileRead unFileRead2(un_fd);
-          unlink(un_fn.data());
-          // un_map = unFileRead2.mmap_file();
-
-          usedNodesCount = unFileRead.fsize() / sizeof(google::protobuf::int64);
-
-          unFileRead.close_fd();
-
-          std::cerr << "Used nodes count in partition: " << i << " is "
-                    << usedNodesCount << std::endl;
-
-          for (uint64_t j = 0; j < usedNodesCount; j++) {
-            google::protobuf::int64* n =
-                reinterpret_cast<google::protobuf::int64*>(
-                    static_cast<char*>(un_map) +
-                    j * sizeof(google::protobuf::int64));
-
-            auto id = *n > 0 ? *n : -(*n);
-
-            const auto nodeIt = nodesHash.find(id);
-
-            if (nodeIt == nodesHash.end()) {
-              throw std::runtime_error("no node found for used node");
-            }
-
-            tupleFileWrite.add(
-                std::make_tuple(nodeIt->second->offset, nodeIt->second->lat,
-                                nodeIt->second->lon, nodeIt->second->used));
-          }
-          nodesHash.clear();
-          tupleFileWrite.flush();
-          tupleFileWrite.close_fd();
-
-          unFileRead.unmap_file();
-
-          // rnFileRead.unmap_file();
-        }
-      });
-
-  // nodePartsCluster.flush();
+  nodePartsCluster.flush();
   nodePartsCluster.close_fds();
 
   nodeOffsets.clear();
@@ -818,7 +764,7 @@ int main(int argc, char* argv[]) {
   void* way_nodes_map = wayNodesFileRead.mmap_file();
   wayNodesFileRead.close_fd();
 
-  std::vector<std::tuple<int, uint64_t, void*, uint64_t>> nodeTupleFiles;
+  std::vector<std::tuple<int, uint64_t, void*>> nodeTupleFiles;
   nodeTupleFiles.resize(HASH_PARTITIONS_NUM);
 
   const uint64_t TUPLES_CHUNK_SIZE = 327'680;
@@ -850,7 +796,7 @@ int main(int argc, char* argv[]) {
       std::cerr << "Failed mapping initial chunk" << std::endl;
       return 1;
     }
-    nodeTupleFiles[i] = std::make_tuple(fd, size, map, 0);
+    nodeTupleFiles[i] = std::make_tuple(fd, size, map);
   }
 
   std::vector<std::pair<long, int>> pixelWayFiles;
@@ -893,451 +839,154 @@ int main(int argc, char* argv[]) {
   uint64_t totalBorderEdges = 0;
   uint64_t totalBorderNodes = 0;
 
-  std::mutex borderBlockMutex;
-  std::mutex edgeMutex;
+  for (uint64_t i = 0; i < totalWaysCount; i++) {
+    DiskWay way = *reinterpret_cast<DiskWay*>(static_cast<char*>(ways_map) +
+                                              i * sizeof(DiskWay));
 
-  tbb::parallel_for(
-      tbb::blocked_range<uint64_t>(0ull, totalWaysCount), [&](auto range) {
-        for (uint64_t i = range.begin(); i != range.end(); i++) {
-          DiskWay way = *reinterpret_cast<DiskWay*>(
-              static_cast<char*>(ways_map) + i * sizeof(DiskWay));
+    std::pair<google::protobuf::int64, uint64_t>* wayNodePairs =
+        reinterpret_cast<std::pair<google::protobuf::int64, uint64_t>*>(
+            static_cast<char*>(way_nodes_map) +
+            way.offset * sizeof(std::pair<google::protobuf::int64, uint64_t>));
 
-          std::pair<google::protobuf::int64, uint64_t>* wayNodePairs =
-              reinterpret_cast<std::pair<google::protobuf::int64, uint64_t>*>(
-                  static_cast<char*>(way_nodes_map) +
-                  way.offset *
-                      sizeof(std::pair<google::protobuf::int64, uint64_t>));
+    auto sourceWayNodePair = *wayNodePairs;
 
-          auto sourceWayNodePair = *wayNodePairs;
+    uint64_t sourceHash = MurmurHash64A_1(wayNodePairs->first) & HASH_MASK;
 
-          uint64_t sourceHash =
-              MurmurHash64A_1(wayNodePairs->first) & HASH_MASK;
+    std::tuple<uint64_t, double, double, uint64_t> sourceTuple =
+        *reinterpret_cast<std::tuple<uint64_t, double, double, uint64_t>*>(
+            static_cast<char*>(get<2>(nodeTupleFiles[sourceHash])) +
+            (wayNodePairs->second) *
+                sizeof(std::tuple<uint64_t, double, double, uint64_t>));
 
-          // if (get<3>(nodeTupleFiles[sourceHash]) != 0 &&
-          //     get<3>(nodeTupleFiles[sourceHash]) % TUPLES_IN_CHUNK == 0) {
-          //   if (munmap(get<2>(nodeTupleFiles[sourceHash]), TUPLES_CHUNK_SIZE)
-          //   ==
-          //       -1) {
-          //     std::cerr << "Failed unmapping tuple chunk" << std::endl;
-          //     return 1;
-          //   }
-          //   get<2>(nodeTupleFiles[sourceHash]) = mmap(
-          //       nullptr,
-          //       get<1>(nodeTupleFiles[sourceHash]) -
-          //                   get<3>(nodeTupleFiles[sourceHash]) *
-          //                       sizeof(std::tuple<uint64_t, double, double,
-          //                                         uint64_t>) <
-          //               TUPLES_CHUNK_SIZE
-          //           ? get<1>(nodeTupleFiles[sourceHash]) -
-          //                 get<3>(nodeTupleFiles[sourceHash]) *
-          //                     sizeof(std::tuple<uint64_t, double, double,
-          //                                       uint64_t>)
-          //           : TUPLES_CHUNK_SIZE,
-          //       PROT_READ, MAP_PRIVATE, get<0>(nodeTupleFiles[sourceHash]),
-          //       get<3>(nodeTupleFiles[sourceHash]) *
-          //           sizeof(std::tuple<uint64_t, double, double, uint64_t>));
-          //   if (get<2>(nodeTupleFiles[sourceHash]) == MAP_FAILED) {
-          //     std::cerr << "Failed mapping tuple chunk (dynamic)" <<
-          //     std::endl; return 1;
-          //   }
-          // }
+    auto prevTuple = sourceTuple;
 
-          std::tuple<uint64_t, double, double, uint64_t> sourceTuple =
-              *reinterpret_cast<
-                  std::tuple<uint64_t, double, double, uint64_t>*>(
-                  static_cast<char*>(get<2>(nodeTupleFiles[sourceHash])) +
-                  (wayNodePairs->second) *
-                      sizeof(std::tuple<uint64_t, double, double, uint64_t>));
-          get<3>(nodeTupleFiles[sourceHash])++;
+    long sourceIpix;
 
-          auto prevTuple = sourceTuple;
+    auto theta = (90 - get<1>(sourceTuple)) * M_PI / 180;
+    auto phi = get<2>(sourceTuple) * M_PI / 180;
 
-          long sourceIpix;
+    ang2pix_ring(50, theta, phi, &sourceIpix);
 
-          auto theta = (90 - get<1>(sourceTuple)) * M_PI / 180;
-          auto phi = get<2>(sourceTuple) * M_PI / 180;
+    double cost = 0;
 
-          ang2pix_ring(50, theta, phi, &sourceIpix);
+    for (uint64_t j = 1; j < way.size; j++) {
+      auto wayNodePair = *(wayNodePairs + j);
+      auto nodeId = wayNodePair.first;
+      auto hash = MurmurHash64A_1(nodeId) & HASH_MASK;
 
-          double cost = 0;
+      auto tupleHashMap = get<2>(nodeTupleFiles[hash]);
 
-          for (uint64_t j = 1; j < way.size; j++) {
-            auto wayNodePair = *(wayNodePairs + j);
-            auto nodeId = wayNodePair.first;
-            auto hash = MurmurHash64A_1(nodeId) & HASH_MASK;
+      std::tuple<uint64_t, double, double, uint64_t> wayNodeTuple =
+          *reinterpret_cast<std::tuple<uint64_t, double, double, uint64_t>*>(
+              static_cast<char*>(get<2>(nodeTupleFiles[hash])) +
+              (wayNodePair.second) *
+                  sizeof(std::tuple<uint64_t, double, double, uint64_t>));
 
-            auto tupleHashPos = get<3>(nodeTupleFiles[hash]);
-            auto tupleHashMap = get<2>(nodeTupleFiles[hash]);
-            // if (tupleHashPos != 0 && tupleHashPos % TUPLES_IN_CHUNK == 0) {
-            //   if (munmap(tupleHashMap, TUPLES_CHUNK_SIZE) == -1) {
-            //     std::cerr << "Failed unmapping tuple chunk" << std::endl;
-            //     return 1;
-            //   }
-            //   get<2>(nodeTupleFiles[hash]) = mmap(
-            //       nullptr,
-            //       get<1>(nodeTupleFiles[hash]) -
-            //                   tupleHashPos *
-            //                       sizeof(std::tuple<uint64_t, double, double,
-            //                                         uint64_t>) <
-            //               TUPLES_CHUNK_SIZE
-            //           ? get<1>(nodeTupleFiles[hash]) -
-            //                 tupleHashPos * sizeof(std::tuple<uint64_t,
-            //                 double,
-            //                                                  double,
-            //                                                  uint64_t>)
-            //           : TUPLES_CHUNK_SIZE,
-            //       PROT_READ, MAP_PRIVATE, get<0>(nodeTupleFiles[hash]),
-            //       get<3>(nodeTupleFiles[hash]) *
-            //           sizeof(std::tuple<uint64_t, double, double,
-            //           uint64_t>));
-            //   if (get<2>(nodeTupleFiles[hash]) == MAP_FAILED) {
-            //     std::cerr << "Failed mapping tuple chunk (dynamic)"
-            //               << std::endl;
-            //     return 1;
-            //   }
-            // }
+      cost += geopointsDistance(
+          std::make_pair(get<1>(prevTuple), get<2>(prevTuple)),
+          std::make_pair(get<1>(wayNodeTuple), get<2>(wayNodeTuple)));
 
-            std::tuple<uint64_t, double, double, uint64_t> wayNodeTuple =
-                *reinterpret_cast<
-                    std::tuple<uint64_t, double, double, uint64_t>*>(
-                    static_cast<char*>(get<2>(nodeTupleFiles[hash])) +
-                    (wayNodePair.second) *
-                        sizeof(std::tuple<uint64_t, double, double, uint64_t>));
-            get<3>(nodeTupleFiles[hash])++;
+      prevTuple = wayNodeTuple;
 
-            cost += geopointsDistance(
-                std::make_pair(get<1>(prevTuple), get<2>(prevTuple)),
-                std::make_pair(get<1>(wayNodeTuple), get<2>(wayNodeTuple)));
+      if (get<3>(wayNodeTuple) <= 1) {
+        continue;
+      }
 
-            prevTuple = wayNodeTuple;
+      auto theta = (90 - get<1>(wayNodeTuple)) * M_PI / 180;
+      auto phi = get<2>(wayNodeTuple) * M_PI / 180;
 
-            if (get<3>(wayNodeTuple) <= 1) {
-              continue;
-            }
+      long ipix;
 
-            auto theta = (90 - get<1>(wayNodeTuple)) * M_PI / 180;
-            auto phi = get<2>(wayNodeTuple) * M_PI / 180;
+      ang2pix_ring(50, theta, phi, &ipix);
 
-            long ipix;
-
-            ang2pix_ring(50, theta, phi, &ipix);
-
-            if (ipix == sourceIpix) {
-              {
-                std::unique_lock<std::mutex> lock(edgeMutex);
-                edgeFileClusterWrite.add(
-                    sourceIpix,
-                    parser::Edge{edgeId, way.id, 0, sourceWayNodePair.first,
-                                 get<0>(sourceTuple), wayNodePair.first,
-                                 get<0>(wayNodeTuple), cost, sourceIpix});
-                edgeId++;
-                if (!way.oneway) {
-                  edgeFileClusterWrite.add(
-                      sourceIpix,
-                      parser::Edge{parser::Edge{
-                          edgeId, way.id, 0, wayNodePair.first,
-                          get<0>(wayNodeTuple), sourceWayNodePair.first,
-                          get<0>(sourceTuple), cost, sourceIpix}});
-                  edgeId++;
-                }
-              }
-            } else {
-              totalBorderEdges++;
-              totalBorderNodes += 2;
-              {
-                std::unique_lock<std::mutex> lock(borderBlockMutex);
-                borderNodesFileClusterWrite.add(
-                    sourceIpix,
-                    parser::Node{sourceWayNodePair.first, get<1>(sourceTuple),
-                                 get<2>(sourceTuple), get<3>(sourceTuple)});
-                borderNodesFileClusterWrite.add(
-                    sourceIpix,
-                    parser::Node{wayNodePair.first, get<1>(wayNodeTuple),
-                                 get<2>(wayNodeTuple), get<3>(wayNodeTuple)});
-
-                auto sourceOffsetsIt = borderOffsets.find(sourceIpix);
-
-                if (sourceOffsetsIt == borderOffsets.end()) {
-                  throw std::runtime_error("Offsets not found for source ipix");
-                }
-
-                sourceOffsetsIt->second += 2;
-
-                borderNodesFileClusterWrite.add(
-                    ipix,
-                    parser::Node{sourceWayNodePair.first, get<1>(sourceTuple),
-                                 get<2>(sourceTuple), get<3>(sourceTuple)});
-                borderNodesFileClusterWrite.add(
-                    ipix,
-                    parser::Node{wayNodePair.first, get<1>(wayNodeTuple),
-                                 get<2>(wayNodeTuple), get<3>(wayNodeTuple)});
-
-                auto targetOffsetsIt = borderOffsets.find(ipix);
-                targetOffsetsIt->second += 2;
-
-                borderEdgeFileClusterWrite.add(
-                    sourceIpix,
-                    parser::Edge{edgeId, way.id, 0, sourceWayNodePair.first,
-                                 sourceOffsetsIt->second - 2, wayNodePair.first,
-                                 sourceOffsetsIt->second - 1, cost, 0});
-                edgeId++;
-
-                if (!way.oneway) {
-                  borderEdgeFileClusterWrite.add(
-                      sourceIpix,
-                      parser::Edge{edgeId, way.id, 0, wayNodePair.first,
-                                   sourceOffsetsIt->second - 1,
-                                   sourceWayNodePair.first,
-                                   sourceOffsetsIt->second - 2, cost, 0});
-                  edgeId++;
-                }
-
-                borderEdgeFileClusterWrite.add(
-                    ipix,
-                    parser::Edge{edgeId - 2, way.id, 0, sourceWayNodePair.first,
-                                 targetOffsetsIt->second - 2, wayNodePair.first,
-                                 targetOffsetsIt->second - 1, cost, 0});
-
-                if (!way.oneway) {
-                  borderEdgeFileClusterWrite.add(
-                      ipix,
-                      parser::Edge{edgeId - 1, way.id, 0, wayNodePair.first,
-                                   targetOffsetsIt->second - 1,
-                                   sourceWayNodePair.first,
-                                   targetOffsetsIt->second - 2, cost, 0});
-                }
-              }
-            }
-
-            sourceTuple = wayNodeTuple;
-            sourceWayNodePair = wayNodePair;
-            sourceIpix = ipix;
-            cost = 0;
-            edgeId++;
-          }
+      if (ipix == sourceIpix) {
+        edgeFileClusterWrite.add(
+            sourceIpix, parser::Edge{edgeId, way.id, 0, sourceWayNodePair.first,
+                                     get<0>(sourceTuple), wayNodePair.first,
+                                     get<0>(wayNodeTuple), cost, sourceIpix});
+        edgeId++;
+        if (!way.oneway) {
+          edgeFileClusterWrite.add(
+              sourceIpix,
+              parser::Edge{edgeId, way.id, 0, wayNodePair.first,
+                           get<0>(wayNodeTuple), sourceWayNodePair.first,
+                           get<0>(sourceTuple), cost, sourceIpix});
+          edgeId++;
         }
-      });
+      } else {
+        totalBorderEdges++;
+        totalBorderNodes += 2;
 
-  // for (uint64_t i = 0; i < totalWaysCount; i++) {
-  //   DiskWay way = *reinterpret_cast<DiskWay*>(static_cast<char*>(ways_map) +
-  //                                             i * sizeof(DiskWay));
+        borderNodesFileClusterWrite.add(
+            sourceIpix,
+            parser::Node{sourceWayNodePair.first, get<1>(sourceTuple),
+                         get<2>(sourceTuple), get<3>(sourceTuple)});
+        borderNodesFileClusterWrite.add(
+            sourceIpix,
+            parser::Node{wayNodePair.first, get<1>(wayNodeTuple),
+                         get<2>(wayNodeTuple), get<3>(wayNodeTuple)});
 
-  //   std::pair<google::protobuf::int64, uint64_t>* wayNodePairs =
-  //       reinterpret_cast<std::pair<google::protobuf::int64, uint64_t>*>(
-  //           static_cast<char*>(way_nodes_map) +
-  //           way.offset * sizeof(std::pair<google::protobuf::int64,
-  //           uint64_t>));
+        auto sourceOffsetsIt = borderOffsets.find(sourceIpix);
 
-  //   auto sourceWayNodePair = *wayNodePairs;
+        if (sourceOffsetsIt == borderOffsets.end()) {
+          std::cerr << "Offsets not found for source ipix" << std::endl;
+          return 1;
+        }
 
-  //   uint64_t sourceHash = MurmurHash64A_1(wayNodePairs->first) & HASH_MASK;
+        sourceOffsetsIt->second += 2;
 
-  //   if (get<3>(nodeTupleFiles[sourceHash]) != 0 &&
-  //       get<3>(nodeTupleFiles[sourceHash]) % TUPLES_IN_CHUNK == 0) {
-  //     if (munmap(get<2>(nodeTupleFiles[sourceHash]), TUPLES_CHUNK_SIZE) ==
-  //     -1) {
-  //       std::cerr << "Failed unmapping tuple chunk" << std::endl;
-  //       return 1;
-  //     }
-  //     get<2>(nodeTupleFiles[sourceHash]) = mmap(
-  //         nullptr,
-  //         get<1>(nodeTupleFiles[sourceHash]) -
-  //                     get<3>(nodeTupleFiles[sourceHash]) *
-  //                         sizeof(
-  //                             std::tuple<uint64_t, double, double, uint64_t>)
-  //                             <
-  //                 TUPLES_CHUNK_SIZE
-  //             ? get<1>(nodeTupleFiles[sourceHash]) -
-  //                   get<3>(nodeTupleFiles[sourceHash]) *
-  //                       sizeof(std::tuple<uint64_t, double, double,
-  //                       uint64_t>)
-  //             : TUPLES_CHUNK_SIZE,
-  //         PROT_READ, MAP_PRIVATE, get<0>(nodeTupleFiles[sourceHash]),
-  //         get<3>(nodeTupleFiles[sourceHash]) *
-  //             sizeof(std::tuple<uint64_t, double, double, uint64_t>));
-  //     if (get<2>(nodeTupleFiles[sourceHash]) == MAP_FAILED) {
-  //       std::cerr << "Failed mapping tuple chunk (dynamic)" << std::endl;
-  //       return 1;
-  //     }
-  //   }
+        borderNodesFileClusterWrite.add(
+            ipix, parser::Node{sourceWayNodePair.first, get<1>(sourceTuple),
+                               get<2>(sourceTuple), get<3>(sourceTuple)});
+        borderNodesFileClusterWrite.add(
+            ipix, parser::Node{wayNodePair.first, get<1>(wayNodeTuple),
+                               get<2>(wayNodeTuple), get<3>(wayNodeTuple)});
 
-  //   std::tuple<uint64_t, double, double, uint64_t> sourceTuple =
-  //       *reinterpret_cast<std::tuple<uint64_t, double, double, uint64_t>*>(
-  //           static_cast<char*>(get<2>(nodeTupleFiles[sourceHash])) +
-  //           (wayNodePairs->second % TUPLES_IN_CHUNK) *
-  //               sizeof(std::tuple<uint64_t, double, double, uint64_t>));
-  //   get<3>(nodeTupleFiles[sourceHash])++;
+        auto targetOffsetsIt = borderOffsets.find(ipix);
+        targetOffsetsIt->second += 2;
 
-  //   auto prevTuple = sourceTuple;
+        borderEdgeFileClusterWrite.add(
+            sourceIpix,
+            parser::Edge{edgeId, way.id, 0, sourceWayNodePair.first,
+                         sourceOffsetsIt->second - 2, wayNodePair.first,
+                         sourceOffsetsIt->second - 1, cost, 0});
+        edgeId++;
 
-  //   long sourceIpix;
+        if (!way.oneway) {
+          borderEdgeFileClusterWrite.add(
+              sourceIpix,
+              parser::Edge{edgeId, way.id, 0, wayNodePair.first,
+                           sourceOffsetsIt->second - 1, sourceWayNodePair.first,
+                           sourceOffsetsIt->second - 2, cost, 0});
+          edgeId++;
+        }
 
-  //   auto theta = (90 - get<1>(sourceTuple)) * M_PI / 180;
-  //   auto phi = get<2>(sourceTuple) * M_PI / 180;
+        borderEdgeFileClusterWrite.add(
+            ipix, parser::Edge{edgeId - 2, way.id, 0, sourceWayNodePair.first,
+                               targetOffsetsIt->second - 2, wayNodePair.first,
+                               targetOffsetsIt->second - 1, cost, 0});
 
-  //   ang2pix_ring(50, theta, phi, &sourceIpix);
+        if (!way.oneway) {
+          borderEdgeFileClusterWrite.add(
+              ipix,
+              parser::Edge{edgeId - 1, way.id, 0, wayNodePair.first,
+                           targetOffsetsIt->second - 1, sourceWayNodePair.first,
+                           targetOffsetsIt->second - 2, cost, 0});
+        }
+      }
 
-  //   double cost = 0;
-
-  //   for (uint64_t j = 1; j < way.size; j++) {
-  //     auto wayNodePair = *(wayNodePairs + j);
-  //     auto nodeId = wayNodePair.first;
-  //     auto hash = MurmurHash64A_1(nodeId) & HASH_MASK;
-
-  //     auto tupleHashPos = get<3>(nodeTupleFiles[hash]);
-  //     auto tupleHashMap = get<2>(nodeTupleFiles[hash]);
-  //     if (tupleHashPos != 0 && tupleHashPos % TUPLES_IN_CHUNK == 0) {
-  //       if (munmap(tupleHashMap, TUPLES_CHUNK_SIZE) == -1) {
-  //         std::cerr << "Failed unmapping tuple chunk" << std::endl;
-  //         return 1;
-  //       }
-  //       get<2>(nodeTupleFiles[hash]) = mmap(
-  //           nullptr,
-  //           get<1>(nodeTupleFiles[hash]) -
-  //                       tupleHashPos * sizeof(std::tuple<uint64_t, double,
-  //                                                        double, uint64_t>) <
-  //                   TUPLES_CHUNK_SIZE
-  //               ? get<1>(nodeTupleFiles[hash]) -
-  //                     tupleHashPos *
-  //                         sizeof(std::tuple<uint64_t, double, double,
-  //                         uint64_t>)
-  //               : TUPLES_CHUNK_SIZE,
-  //           PROT_READ, MAP_PRIVATE, get<0>(nodeTupleFiles[hash]),
-  //           get<3>(nodeTupleFiles[hash]) *
-  //               sizeof(std::tuple<uint64_t, double, double, uint64_t>));
-  //       if (get<2>(nodeTupleFiles[hash]) == MAP_FAILED) {
-  //         std::cerr << "Failed mapping tuple chunk (dynamic)" << std::endl;
-  //         return 1;
-  //       }
-  //     }
-
-  //     std::tuple<uint64_t, double, double, uint64_t> wayNodeTuple =
-  //         *reinterpret_cast<std::tuple<uint64_t, double, double, uint64_t>*>(
-  //             static_cast<char*>(get<2>(nodeTupleFiles[hash])) +
-  //             (wayNodePair.second % TUPLES_IN_CHUNK) *
-  //                 sizeof(std::tuple<uint64_t, double, double, uint64_t>));
-  //     get<3>(nodeTupleFiles[hash])++;
-
-  //     cost += geopointsDistance(
-  //         std::make_pair(get<1>(prevTuple), get<2>(prevTuple)),
-  //         std::make_pair(get<1>(wayNodeTuple), get<2>(wayNodeTuple)));
-
-  //     prevTuple = wayNodeTuple;
-
-  //     if (get<3>(wayNodeTuple) <= 1) {
-  //       continue;
-  //     }
-
-  //     auto theta = (90 - get<1>(wayNodeTuple)) * M_PI / 180;
-  //     auto phi = get<2>(wayNodeTuple) * M_PI / 180;
-
-  //     long ipix;
-
-  //     ang2pix_ring(50, theta, phi, &ipix);
-
-  //     if (ipix == sourceIpix) {
-  //       edgeFileClusterWrite.add(
-  //           sourceIpix, parser::Edge{edgeId, way.id, 0,
-  //           sourceWayNodePair.first,
-  //                                    get<0>(sourceTuple), wayNodePair.first,
-  //                                    get<0>(wayNodeTuple), cost,
-  //                                    sourceIpix});
-  //       edgeId++;
-  //       if (!way.oneway) {
-  //         edgeFileClusterWrite.add(
-  //             sourceIpix, parser::Edge{parser::Edge{
-  //                             edgeId, way.id, 0, wayNodePair.first,
-  //                             get<0>(wayNodeTuple), sourceWayNodePair.first,
-  //                             get<0>(sourceTuple), cost, sourceIpix}});
-  //         edgeId++;
-  //       }
-  //     } else {
-  //       totalBorderEdges++;
-  //       totalBorderNodes += 2;
-
-  //       {
-  //         std::unique_lock<std::mutex> lock(borderBlockMutex);
-  //         borderNodesFileClusterWrite.add(
-  //             sourceIpix,
-  //             parser::Node{sourceWayNodePair.first, get<1>(sourceTuple),
-  //                          get<2>(sourceTuple), get<3>(sourceTuple)});
-  //         borderNodesFileClusterWrite.add(
-  //             sourceIpix,
-  //             parser::Node{wayNodePair.first, get<1>(wayNodeTuple),
-  //                          get<2>(wayNodeTuple), get<3>(wayNodeTuple)});
-
-  //         auto sourceOffsetsIt = borderOffsets.find(sourceIpix);
-
-  //         if (sourceOffsetsIt == borderOffsets.end()) {
-  //           std::cerr << "Offsets not found for source ipix" << std::endl;
-  //           return 1;
-  //         }
-
-  //         sourceOffsetsIt->second += 2;
-
-  //         borderNodesFileClusterWrite.add(
-  //             ipix, parser::Node{sourceWayNodePair.first,
-  //             get<1>(sourceTuple),
-  //                                get<2>(sourceTuple), get<3>(sourceTuple)});
-  //         borderNodesFileClusterWrite.add(
-  //             ipix, parser::Node{wayNodePair.first, get<1>(wayNodeTuple),
-  //                                get<2>(wayNodeTuple),
-  //                                get<3>(wayNodeTuple)});
-
-  //         auto targetOffsetsIt = borderOffsets.find(ipix);
-  //         targetOffsetsIt->second += 2;
-
-  //         borderEdgeFileClusterWrite.add(
-  //             sourceIpix,
-  //             parser::Edge{edgeId, way.id, 0, sourceWayNodePair.first,
-  //                          sourceOffsetsIt->second - 2, wayNodePair.first,
-  //                          sourceOffsetsIt->second - 1, cost, 0});
-  //         edgeId++;
-
-  //         if (!way.oneway) {
-  //           borderEdgeFileClusterWrite.add(
-  //               sourceIpix, parser::Edge{edgeId, way.id, 0,
-  //               wayNodePair.first,
-  //                                        sourceOffsetsIt->second - 1,
-  //                                        sourceWayNodePair.first,
-  //                                        sourceOffsetsIt->second - 2, cost,
-  //                                        0});
-  //           edgeId++;
-  //         }
-
-  //         borderEdgeFileClusterWrite.add(
-  //             ipix, parser::Edge{edgeId - 2, way.id, 0,
-  //             sourceWayNodePair.first,
-  //                                targetOffsetsIt->second - 2,
-  //                                wayNodePair.first, targetOffsetsIt->second -
-  //                                1, cost, 0});
-
-  //         if (!way.oneway) {
-  //           borderEdgeFileClusterWrite.add(
-  //               ipix, parser::Edge{edgeId - 1, way.id, 0, wayNodePair.first,
-  //                                  targetOffsetsIt->second - 1,
-  //                                  sourceWayNodePair.first,
-  //                                  targetOffsetsIt->second - 2, cost, 0});
-  //         }
-  //       }
-  //     }
-
-  //     sourceTuple = wayNodeTuple;
-  //     sourceWayNodePair = wayNodePair;
-  //     sourceIpix = ipix;
-  //     cost = 0;
-  //     edgeId++;
-  //   }
-  // }
+      sourceTuple = wayNodeTuple;
+      sourceWayNodePair = wayNodePair;
+      sourceIpix = ipix;
+      cost = 0;
+      edgeId++;
+    }
+  }
 
   std::cerr << "Partitioned ways" << std::endl;
 
   for (const auto& t : nodeTupleFiles) {
-    if (munmap(get<2>(t),
-               //  (get<3>(t) *
-               //   sizeof(std::tuple<uint64_t, double, double, uint64_t>)) %
-               //      TUPLES_CHUNK_SIZE) == -1)
-               get<1>(t))) {
+    if (munmap(get<2>(t), get<1>(t))) {
       std::cerr << "failed unmapping" << std::endl;
       return 1;
     }
@@ -1569,6 +1218,7 @@ int main(int argc, char* argv[]) {
     unlink(edgeFilename.data());
 
     if (edgesFile.fsize() == 0) {
+      nodesFile.close_fd();
       edgesFile.close_fd();
       return;
     }
