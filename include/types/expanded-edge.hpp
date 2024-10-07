@@ -12,12 +12,6 @@ struct ExpandedEdge {
   uint64_t sourceEdgeOffset;
   google::protobuf::int64 targetEdgeId;
   uint64_t targetEdgeOffset;
-  // google::protobuf::int64 source;
-  // google::protobuf::int64 target;
-  // parser::Node* sourceEdgeSourceNode;
-  // parser::Node* sourceEdgeTargetNode;
-  // parser::Node* targetEdgeSourceNode;
-  // parser::Node* targetEdgeTargetNode;
   double cost;
   long partition;
 };

@@ -18,9 +18,9 @@ struct Relation {
 struct Restriction : parser::Relation {
   Restriction(google::protobuf::int64 id, google::protobuf::int64 from,
               google::protobuf::int64 via, google::protobuf::int64 to,
-              std::string type)
+              int8_t type)
       : parser::Relation(id, from, via, to), type(type) {}
 
-  std::string type;
+  int8_t type;
 };
 }  // namespace parser

@@ -43,12 +43,5 @@ void hash_restrictions(restriction_buffer_t& buffer,
                        only_restrictions_by_to& onlyRestrictionsByTo,
                        no_restriction_map_t& noRestrictionsMap);
 
-void process_ways(way_buffer_t& buffer, node_count_t& usedNodes,
-                  only_restrictions_by_to& onlyRestrictionsByTo,
-                  only_restriction_mm& onlyRestrictionsMap);
-
-void hash_nodes(node_buffer_t& buffer, node_count_t& usedNodes,
-                node_map& nodesHashMap);
-
 }  // namespace processing
 }  // namespace parser

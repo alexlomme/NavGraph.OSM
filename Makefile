@@ -18,12 +18,12 @@ CXXFLAGS		   := -Wall -std=c++20 $(INCLUDE_FLAGS) -g -lz -ldeflate -lprotobuf -O
     -labsl_log_internal_proto 
 SRC				   := ./include/osmpbf/osmformat.pb.cc \
                       ./include/osmpbf/fileformat.pb.cc \
-                      ./include/parsing/primitive-block-parser.cpp \
                       ./include/utils/geomath.cpp \
-                      ./include/graph/ways-to-edges.cpp \
+                      ./include/graph/graph.cpp \
                       ./include/processing.cpp \
-                      ./include/parsing/parsing-functions.cpp \
-                      ./include/graph/graph.cpp
+                      ./include/parsing/primitive-block-parser.cpp
+                    #   ./include/parsing/parsing-functions.cpp
+                    # ./include/graph/ways-to-edges.cpp
 # -lz -lexpat -lbz2
 
 main:
