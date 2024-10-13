@@ -12,10 +12,10 @@ namespace parser {
 namespace graph {
 namespace invert {
 
-template <typename E, typename EE>
+// template <typename E>
 void applyRestrictionsSourcePartition(
-    E* sourceEdge,
-    std::unordered_map<google::protobuf::int64, std::vector<EE*>>& graph,
+    parser::Edge* sourceEdge, long sourceIpix, uint64_t sourceOffset,
+    std::vector<std::tuple<parser::Edge*, long, uint64_t>>& outgoingEdges,
     parser::Node* nodes, parser::Node* borderNodes,
     std::unordered_multimap<
         std::tuple<google::protobuf::int64, google::protobuf::int64>,
@@ -26,11 +26,11 @@ void applyRestrictionsSourcePartition(
     google::protobuf::int64& expandedEdgeId,
     FileWrite<parser::ExpandedEdge>& expEdgesFileWrite) {
   auto viaNodeId = sourceEdge->targetNodeId;
-  auto graphNodePairIt = graph.find(viaNodeId);
+  // auto graphNodePairIt = graph.find(viaNodeId);
 
-  if (graphNodePairIt == graph.end()) {
-    return;
-  }
+  // if (graphNodePairIt == graph.end()) {
+  //   return;
+  // }
 
   auto mandRestRange = onlyRestrictionsHash.equal_range(
       std::make_pair(sourceEdge->wayId, viaNodeId));
@@ -56,19 +56,18 @@ void applyRestrictionsSourcePartition(
   }
 
   if (numMandRests == 1) {
-    auto targetEdgePtrIt =
-        std::find_if(graphNodePairIt->second.begin(),
-                     graphNodePairIt->second.end(), [&](auto edgePtr) {
-                       return mandRestRange.first->second->to == edgePtr->wayId;
-                     });
+    auto targetEdgePtrIt = std::find_if(
+        outgoingEdges.begin(), outgoingEdges.end(), [&](auto edgePtr) {
+          return mandRestRange.first->second->to == get<0>(edgePtr)->wayId;
+        });
 
-    if (targetEdgePtrIt != graphNodePairIt->second.end()) {
+    if (targetEdgePtrIt != outgoingEdges.end()) {
       auto sourceEdgeSourceNodePtr = nodes + sourceEdge->sourceNodeOffset;
       auto sourceEdgeTargetNodePtr = nodes + sourceEdge->targetNodeOffset;
       auto targetEdgeSourceNodePtr =
-          borderNodes + (*targetEdgePtrIt)->sourceNodeOffset;
+          borderNodes + (get<0>(*targetEdgePtrIt))->sourceNodeOffset;
       auto targetEdgeTargetNodePtr =
-          borderNodes + (*targetEdgePtrIt)->targetNodeOffset;
+          borderNodes + (get<0>(*targetEdgePtrIt))->targetNodeOffset;
 
       if (sourceEdgeSourceNodePtr->lat == targetEdgeTargetNodePtr->lat &&
           sourceEdgeSourceNodePtr->lon == targetEdgeTargetNodePtr->lon &&
@@ -76,14 +75,18 @@ void applyRestrictionsSourcePartition(
           sourceEdgeTargetNodePtr->lon == targetEdgeSourceNodePtr->lon) {
         return;
       }
-      auto forbidRestPairIt = noRestrictionsHash.find(
-          std::make_tuple(sourceEdge->wayId, (*targetEdgePtrIt)->wayId));
+      auto forbidRestPairIt = noRestrictionsHash.find(std::make_tuple(
+          sourceEdge->wayId, (get<0>(*targetEdgePtrIt))->wayId));
       if (forbidRestPairIt != noRestrictionsHash.end()) {
         return;
       }
+      // expEdgesFileWrite.add(parser::ExpandedEdge{
+      //     expandedEdgeId, sourceEdge->id, 0, (*targetEdgePtrIt)->id, 0,
+      //     (sourceEdge->cost + (get<0>(*targetEdgePtrIt))->cost) / 2, 0});
       expEdgesFileWrite.add(parser::ExpandedEdge{
-          expandedEdgeId, sourceEdge->id, 0, (*targetEdgePtrIt)->id, 0,
-          (sourceEdge->cost + (*targetEdgePtrIt)->cost) / 2, 0});
+          expandedEdgeId, sourceIpix, sourceOffset, get<1>(*targetEdgePtrIt),
+          get<2>(*targetEdgePtrIt),
+          (sourceEdge->cost + (get<0>(*targetEdgePtrIt))->cost) / 2});
       expandedEdgeId++;
       return;
     } else {
@@ -91,8 +94,8 @@ void applyRestrictionsSourcePartition(
     }
   }
 
-  for (auto targetEdgePtr : graphNodePairIt->second) {
-    auto targetEdge = *targetEdgePtr;
+  for (auto tuple : outgoingEdges) {
+    auto targetEdge = *get<0>(tuple);
 
     auto sourceEdgeSourceNodePtr = nodes + sourceEdge->sourceNodeOffset;
     auto sourceEdgeTargetNodePtr = nodes + sourceEdge->targetNodeOffset;
@@ -113,10 +116,14 @@ void applyRestrictionsSourcePartition(
       continue;
     }
 
-    expEdgesFileWrite.add(
-        parser::ExpandedEdge{expandedEdgeId, sourceEdge->id, 0, targetEdge.id,
-                             0, (sourceEdge->cost + targetEdge.cost) / 2, 0});
-
+    // expEdgesFileWrite.add(
+    //     parser::ExpandedEdge{expandedEdgeId, sourceEdge->id, 0,
+    //     targetEdge.id,
+    //                          0, (sourceEdge->cost + targetEdge.cost) / 2,
+    //                          0});
+    expEdgesFileWrite.add(parser::ExpandedEdge{
+        expandedEdgeId, sourceIpix, sourceOffset, get<1>(tuple), get<2>(tuple),
+        (sourceEdge->cost + targetEdge.cost) / 2});
     expandedEdgeId++;
   }
 }

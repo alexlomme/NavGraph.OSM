@@ -8,12 +8,11 @@ namespace parser {
 
 struct ExpandedEdge {
   google::protobuf::int64 id;
-  google::protobuf::int64 sourceEdgeId;
+  long sourcePart;
   uint64_t sourceEdgeOffset;
-  google::protobuf::int64 targetEdgeId;
+  long targetPart;
   uint64_t targetEdgeOffset;
   double cost;
-  long partition;
 };
 
 }  // namespace parser
