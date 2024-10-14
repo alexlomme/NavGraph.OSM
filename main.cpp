@@ -1762,18 +1762,19 @@ int main(int argc, char* argv[]) {
   // osm_way_to_source_node;
   // osm_way_to_target_node
 
-  ofile << "from_vertex_id,"
-        << "to_vertex_id,"
-        << "weight,"
-        << "geom,"
-        << "was_one_way,"
-        << "edge_id,"
-        << "osm_way_from,"
-        << "osm_way_to,"
-        << "osm_way_from_source_node,"
-        << "osm_way_from_target_node,"
-        << "osm_way_to_source_node,"
-        << "osm_way_to_target_node" << std::endl;
+  ofile
+      // << "from_vertex_id,"
+      // << "to_vertex_id,"
+      << "weight,"
+      << "geom,"
+      << "was_one_way,"
+      // << "edge_id,"
+      << "osm_way_from,"
+      << "osm_way_to,"
+      << "osm_way_from_source_node,"
+      << "osm_way_from_target_node,"
+      << "osm_way_to_source_node,"
+      << "osm_way_to_target_node" << std::endl;
 
   for (auto ipix : usedPixels) {
     int fd_e = open(
@@ -1913,9 +1914,8 @@ int main(int argc, char* argv[]) {
       auto midPointTarget = findMiddlePoint(targetGeomList);
 
       std::vector<std::pair<double, double>> secondHalfGeom;
-      secondHalfGeom.push_back(midPointTarget.second);
 
-      for (uint64_t j = 0; j < midPointTarget.first; j++) {
+      for (uint64_t j = 0; j <= midPointTarget.first; j++) {
         secondHalfGeom.push_back(targetGeomList[j]);
       }
 
@@ -1931,8 +1931,8 @@ int main(int argc, char* argv[]) {
       auto osm_way_to_source_node = targetEdge->sourceNodeId;
       auto osm_way_to_target_node = targetEdge->targetNodeId;
 
-      ofile << from_vertex_id << ",";
-      ofile << to_vertex_id << ",";
+      // ofile << from_vertex_id << ",";
+      // ofile << to_vertex_id << ",";
       ofile << std::fixed << std::setprecision(6) << weight << ",";
       ofile << "LINESTRING(";
 
@@ -1952,7 +1952,7 @@ int main(int argc, char* argv[]) {
             << ",";
 
       ofile << (was_one_way ? "true" : "false") << ",";
-      ofile << edge_id << ",";
+      // ofile << edge_id << ",";
       ofile << osm_way_from << ",";
       ofile << osm_way_to << ",";
       ofile << osm_way_from_source_node << ",";
@@ -2126,9 +2126,8 @@ int main(int argc, char* argv[]) {
         auto midPointTarget = findMiddlePoint(targetGeomList);
 
         std::vector<std::pair<double, double>> secondHalfGeom;
-        secondHalfGeom.push_back(midPointTarget.second);
 
-        for (uint64_t j = 0; j < midPointTarget.first; j++) {
+        for (uint64_t j = 0; j <= midPointTarget.first; j++) {
           secondHalfGeom.push_back(targetGeomList[j]);
         }
 
@@ -2144,8 +2143,8 @@ int main(int argc, char* argv[]) {
         auto osm_way_to_source_node = targetEdge->sourceNodeId;
         auto osm_way_to_target_node = targetEdge->targetNodeId;
 
-        ofile << from_vertex_id << ",";
-        ofile << to_vertex_id << ",";
+        // ofile << from_vertex_id << ",";
+        // ofile << to_vertex_id << ",";
         ofile << std::fixed << std::setprecision(6) << weight << ",";
         ofile << "LINESTRING(";
 
@@ -2165,7 +2164,7 @@ int main(int argc, char* argv[]) {
               << ",";
 
         ofile << (was_one_way ? "true" : "false") << ",";
-        ofile << edge_id << ",";
+        // ofile << edge_id << ",";
         ofile << osm_way_from << ",";
         ofile << osm_way_to << ",";
         ofile << osm_way_from_source_node << ",";
