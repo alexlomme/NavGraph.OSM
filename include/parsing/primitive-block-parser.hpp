@@ -13,13 +13,8 @@ namespace parser {
 
 namespace primitive_block {
 
-void parse(OSMPBF::PrimitiveBlock& block, std::vector<parser::Node>& nodeBuffer,
-           std::vector<parser::Way>& wayBuffer,
-           std::vector<parser::Restriction>& restrictionBuffer);
-
 double convertCoord(int64_t offset, int32_t granularity, int64_t coord);
 
-// };
 }  // namespace primitive_block
 
 }  // namespace parser

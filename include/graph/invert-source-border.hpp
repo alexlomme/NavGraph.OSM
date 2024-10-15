@@ -24,11 +24,6 @@ void applyRestrictionsSourceBorder(
     google::protobuf::int64& expandedEdgeId,
     FileWrite<parser::ExpandedEdge>& expEdgesFileWrite) {
   auto viaNodeId = sourceEdge->targetNodeId;
-  // auto graphNodePairIt = graph.find(viaNodeId);
-
-  // if (graphNodePairIt == graph.end()) {
-  //   return;
-  // }
 
   auto mandRestRange = onlyRestrictionsHash.equal_range(
       std::make_pair(sourceEdge->wayId, viaNodeId));
@@ -78,9 +73,6 @@ void applyRestrictionsSourceBorder(
       if (forbidRestPairIt != noRestrictionsHash.end()) {
         return;
       }
-      // expEdgesFileWrite.add(parser::ExpandedEdge{
-      //     expandedEdgeId, sourceEdge->id, 0, (*targetEdgePtrIt)->id, 0,
-      //     (sourceEdge->cost + (get<0>(*targetEdgePtrIt))->cost) / 2, 0});
       expEdgesFileWrite.add(parser::ExpandedEdge{
           expandedEdgeId, sourceIpix, sourceOffset, get<1>(*targetEdgePtrIt),
           get<2>(*targetEdgePtrIt),
@@ -114,11 +106,6 @@ void applyRestrictionsSourceBorder(
       continue;
     }
 
-    // expEdgesFileWrite.add(
-    //     parser::ExpandedEdge{expandedEdgeId, sourceEdge->id, 0,
-    //     targetEdge.id,
-    //                          0, (sourceEdge->cost + targetEdge.cost) / 2,
-    //                          0});
     expEdgesFileWrite.add(parser::ExpandedEdge{
         expandedEdgeId, sourceIpix, sourceOffset, get<1>(tuple), get<2>(tuple),
         (sourceEdge->cost + targetEdge.cost) / 2});

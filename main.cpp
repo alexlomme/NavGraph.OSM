@@ -228,6 +228,30 @@ void worker(
 
       auto beforeNodes = std::chrono::high_resolution_clock::now();
 
+      for (auto& node : group.nodes()) {
+        auto lat = parser::primitive_block::convertCoord(
+            primitiveBlock.lat_offset(), primitiveBlock.granularity(),
+            node.lat());
+        auto lon = parser::primitive_block::convertCoord(
+            primitiveBlock.lon_offset(), primitiveBlock.granularity(),
+            node.lon());
+
+        auto theta = (90 - lat) * M_PI / 180;
+        auto phi = lon * M_PI / 180;
+
+        long ipix;
+
+        ang2pix_ring(50, theta, phi, &ipix);
+
+        uint64_t hash = MurmurHash64A_1(node.id()) & HASH_MASK;
+
+        {
+          std::unique_lock<std::mutex> lock(nodesBlockMutexes[hash]);
+          pixels.insert(ipix);
+          nodeFiles[hash].add(parser::Node{node.id(), lat, lon});
+        }
+      }
+
       const auto& denseNodes = group.dense();
 
       if (denseNodes.id_size() != denseNodes.lon_size() ||
@@ -392,11 +416,6 @@ void producer(const char* pbf_data, const char* eof_pbf) {
     }
 
     pbf_data += headerSize;
-
-    {
-      std::unique_lock<std::mutex> lock(filestat_mutex);
-      filestat.total_decomp_size += sizeof(uint32_t) + headerSize;
-    }
 
     if (header.type() != "OSMData") {
       pbf_data += header.datasize();
@@ -843,20 +862,21 @@ int main(int argc, char* argv[]) {
     pixelBorderEdgesFiles.emplace_back(ipix, fd_be);
     borderOffsets.emplace(ipix, 0);
 
-    std::string filename_eg =
-        numFilename("./bin/geo-partitions/edge-geometry/geo-", ipix, "bin");
-    int fd_eg =
-        open(filename_eg.data(), O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
-    pixelEdgeGeometryFiles.emplace_back(ipix, fd_eg);
+    // std::string filename_eg =
+    //     numFilename("./bin/geo-partitions/edge-geometry/geo-", ipix, "bin");
+    // int fd_eg =
+    //     open(filename_eg.data(), O_RDWR | O_CREAT | O_TRUNC, S_IRUSR |
+    //     S_IWUSR);
+    // pixelEdgeGeometryFiles.emplace_back(ipix, fd_eg);
 
-    std::string filename_beg = numFilename(
-        "./bin/geo-partitions/border-edge-geometry/geo-", ipix, "bin");
-    int fd_beg = open(filename_beg.data(), O_RDWR | O_CREAT | O_TRUNC,
-                      S_IRUSR | S_IWUSR);
-    pixelBorderEdgeGeomFiles.emplace_back(ipix, fd_beg);
+    // std::string filename_beg = numFilename(
+    //     "./bin/geo-partitions/border-edge-geometry/geo-", ipix, "bin");
+    // int fd_beg = open(filename_beg.data(), O_RDWR | O_CREAT | O_TRUNC,
+    //                   S_IRUSR | S_IWUSR);
+    // pixelBorderEdgeGeomFiles.emplace_back(ipix, fd_beg);
 
-    geomOffsets.emplace(ipix, 0);
-    borderGeomOffsets.emplace(ipix, 0);
+    // geomOffsets.emplace(ipix, 0);
+    // borderGeomOffsets.emplace(ipix, 0);
   }
 
   KeyFileClusterWrite<long, parser::Edge> edgeFileClusterWrite(
@@ -865,11 +885,12 @@ int main(int argc, char* argv[]) {
       pixelBorderEdgesFiles, MAX_BORDER_EDGES_SIZES_SUM);
   KeyFileClusterWrite<long, parser::Node> borderNodesFileClusterWrite(
       pixelBorderNodesFiles, MAX_BORDER_NODES_SIZES_SUM);
-  KeyFileClusterWrite<long, std::pair<double, double>> edgeGeometryClusterWrite(
-      pixelEdgeGeometryFiles, MAX_WAY_BUF_SIZES_SUM * 12);
-  KeyFileClusterWrite<long, std::pair<double, double>>
-      borderEdgeGeometryClusterWrite(pixelBorderEdgeGeomFiles,
-                                     MAX_BORDER_EDGES_SIZES_SUM * 3);
+  // KeyFileClusterWrite<long, std::pair<double, double>>
+  // edgeGeometryClusterWrite(
+  //     pixelEdgeGeometryFiles, MAX_WAY_BUF_SIZES_SUM * 12);
+  // KeyFileClusterWrite<long, std::pair<double, double>>
+  //     borderEdgeGeometryClusterWrite(pixelBorderEdgeGeomFiles,
+  //                                    MAX_BORDER_EDGES_SIZES_SUM * 3);
 
   google::protobuf::int64 edgeId = 0;
 
@@ -946,9 +967,9 @@ int main(int argc, char* argv[]) {
         auto geomOffset = geomOffsetIt->second;
         auto geomSize = geom.size();
 
-        for (auto dot : geom) {
-          edgeGeometryClusterWrite.add(ipix, dot);
-        }
+        // for (auto dot : geom) {
+        //   edgeGeometryClusterWrite.add(ipix, dot);
+        // }
 
         // edgeFileClusterWrite.add(
         //     sourceIpix, parser::Edge{edgeId, way.id, 0,
@@ -1021,10 +1042,10 @@ int main(int argc, char* argv[]) {
 
         auto geomSize = geom.size();
 
-        for (auto dot : geom) {
-          borderEdgeGeometryClusterWrite.add(sourceIpix, dot);
-          borderEdgeGeometryClusterWrite.add(ipix, dot);
-        }
+        // for (auto dot : geom) {
+        //   borderEdgeGeometryClusterWrite.add(sourceIpix, dot);
+        //   borderEdgeGeometryClusterWrite.add(ipix, dot);
+        // }
 
         // borderEdgeFileClusterWrite.add(
         //     sourceIpix,
@@ -1122,11 +1143,11 @@ int main(int argc, char* argv[]) {
   borderEdgeFileClusterWrite.flush();
   borderEdgeFileClusterWrite.close_fds();
 
-  edgeGeometryClusterWrite.flush();
-  edgeGeometryClusterWrite.close_fds();
+  // edgeGeometryClusterWrite.flush();
+  // edgeGeometryClusterWrite.close_fds();
 
-  borderEdgeGeometryClusterWrite.flush();
-  borderEdgeGeometryClusterWrite.close_fds();
+  // borderEdgeGeometryClusterWrite.flush();
+  // borderEdgeGeometryClusterWrite.close_fds();
 
   pixelWayFiles.clear();
   pixelBorderNodesFiles.clear();
@@ -1309,7 +1330,7 @@ int main(int argc, char* argv[]) {
         numFilename("./bin/geo-partitions/edges/edges-", ipix, "bin");
     int fd_e = open(edgeFilename.data(), O_RDONLY);
     FileRead edgesFile(fd_e);
-    // unlink(edgeFilename.data());
+    unlink(edgeFilename.data());
 
     if (edgesFile.fsize() == 0) {
       edgesFile.close_fd();
@@ -1320,7 +1341,7 @@ int main(int argc, char* argv[]) {
         numFilename("./bin/geo-partitions/nodes/nodes-", ipix, "bin");
     int fd_n = open(nodeFilename.data(), O_RDONLY);
     FileRead nodesFile(fd_n);
-    // unlink(nodeFilename.data());
+    unlink(nodeFilename.data());
 
     void* map_e = edgesFile.mmap_file();
 
@@ -1701,7 +1722,7 @@ int main(int argc, char* argv[]) {
       continue;
     }
 
-    // unlink(filename.data());
+    unlink(filename.data());
     close(fd);
   }
 
@@ -1715,7 +1736,7 @@ int main(int argc, char* argv[]) {
       continue;
     }
 
-    // unlink(filename.data());
+    unlink(filename.data());
     close(fd);
   }
 
@@ -1729,7 +1750,7 @@ int main(int argc, char* argv[]) {
       continue;
     }
 
-    // unlink(filename.data());
+    unlink(filename.data());
     close(fd);
   }
 
@@ -1740,451 +1761,463 @@ int main(int argc, char* argv[]) {
 
   // .csv output
 
-  std::string outputFile = argc > 2 ? argv[2] : "output.csv";
-
-  std::ofstream ofile(outputFile);
-
-  if (!ofile.is_open()) {
-    std::cerr << "Error opening file" << std::endl;
-    return 1;
-  }
-
-  // from_vertex_id;
-  // to_vertex_id;
-  // weight;
-  // geom;
-  // was_one_way;
-  // edge_id;
-  // osm_way_from;
-  // osm_way_to;
-  // osm_way_from_source_node;
-  // osm_way_from_target_node;
-  // osm_way_to_source_node;
-  // osm_way_to_target_node
-
-  ofile
-      // << "from_vertex_id,"
-      // << "to_vertex_id,"
-      << "weight,"
-      << "geom,"
-      << "was_one_way,"
-      // << "edge_id,"
-      << "osm_way_from,"
-      << "osm_way_to,"
-      << "osm_way_from_source_node,"
-      << "osm_way_from_target_node,"
-      << "osm_way_to_source_node,"
-      << "osm_way_to_target_node" << std::endl;
-
-  for (auto ipix : usedPixels) {
-    int fd_e = open(
-        numFilename("./bin/geo-partitions/edges/edges-", ipix, "bin").data(),
-        O_RDONLY);
-    int fd_be = open(
-        numFilename("./bin/geo-partitions/border-edges/edges-", ipix, "bin")
-            .data(),
-        O_RDONLY);
-
-    int fd_ee = open(
-        numFilename("./bin/geo-partitions/exp-edges/exp-edges-", ipix, "bin")
-            .data(),
-        O_RDONLY);
-
-    int fd_eg =
-        open(numFilename("./bin/geo-partitions/edge-geometry/geo-", ipix, "bin")
-                 .data(),
-             O_RDONLY);
-    int fd_beg =
-        open(numFilename("./bin/geo-partitions/border-edge-geometry/geo-", ipix,
-                         "bin")
-                 .data(),
-             O_RDONLY);
-
-    FileRead edgesFileRead(fd_e);
-    FileRead borderEdgesFileRead(fd_be);
-    FileRead expEdgesFileRead(fd_ee);
-    FileRead edgeGeomFileRead(fd_eg);
-    FileRead borderEdgeGeomFileRead(fd_beg);
-
-    void* map_e = edgesFileRead.mmap_file();
-    parser::Edge* edges =
-        reinterpret_cast<parser::Edge*>(static_cast<char*>(map_e));
-    void* map_be = borderEdgesFileRead.mmap_file();
-    parser::Edge* borderEdges =
-        reinterpret_cast<parser::Edge*>(static_cast<char*>(map_be));
-    void* map_ee = expEdgesFileRead.mmap_file();
-    void* map_eg = edgeGeomFileRead.mmap_file();
-    std::pair<double, double>* edgeGeom =
-        reinterpret_cast<std::pair<double, double>*>(
-            static_cast<char*>(map_eg));
-    void* map_beg = borderEdgeGeomFileRead.mmap_file();
-    std::pair<double, double>* borderEdgeGeom =
-        reinterpret_cast<std::pair<double, double>*>(
-            static_cast<char*>(map_beg));
-
-    uint64_t eeCount = expEdgesFileRead.fsize() / sizeof(parser::ExpandedEdge);
-
-    uint64_t beCount = borderEdgesFileRead.fsize() / sizeof(parser::Edge);
-
-    for (uint64_t i = 0; i < eeCount; i++) {
-      parser::ExpandedEdge* expEdge = reinterpret_cast<parser::ExpandedEdge*>(
-          static_cast<char*>(map_ee) + i * sizeof(parser::ExpandedEdge));
-
-      parser::Edge* sourceEdge;
-
-      if (expEdge->sourcePart > 0) {
-        sourceEdge = edges + expEdge->sourceEdgeOffset;
-      } else {
-        sourceEdge = borderEdges + expEdge->sourceEdgeOffset;
-      }
-
-      parser::Edge* targetEdge;
-
-      if (expEdge->targetPart > 0) {
-        targetEdge = edges + expEdge->targetEdgeOffset;
-      } else {
-        targetEdge = borderEdges + expEdge->targetEdgeOffset;
-      }
-
-      // std::cerr << "before" << std::endl;
-
-      // std::cerr << expEdge->sourcePart << std::endl;
-      // std::cerr << expEdge->targetEdgeOffset << std::endl;
-
-      auto from_vertex_id = sourceEdge->id;
-      auto to_vertex_id = targetEdge->id;
-      auto weight = expEdge->cost;
-
-      // std::cerr << "after" << std::endl;
-
-      std::pair<double, double>* sourceGeom;
-
-      if (sourceEdge->part > 0) {
-        sourceGeom = edgeGeom + sourceEdge->geomOffset;
-      } else {
-        // std::cerr << "offset: " << sourceEdge->geomOffset << std::endl;
-        sourceGeom = borderEdgeGeom + sourceEdge->geomOffset;
-      }
-
-      std::vector<std::pair<double, double>> sourceGeomList;
-
-      // std::cerr << "before source geom: " << i << std::endl;
-
-      if (sourceEdge->geomSize > 0) {
-        for (uint64_t j = 0; j < sourceEdge->geomSize; j++) {
-          sourceGeomList.push_back(*(sourceGeom + j));
-        }
-      } else {
-        for (int64_t j = -sourceEdge->geomSize - 1; j >= 0; j--) {
-          sourceGeomList.push_back(*(sourceGeom + j));
-        }
-      }
-
-      // // std::cerr << "after target geom" << std::endl;
-
-      auto midPoint = findMiddlePoint(sourceGeomList);
-
-      std::vector<std::pair<double, double>> firstHalfGeom;
-      firstHalfGeom.push_back(midPoint.second);
+  // std::string outputFile = argc > 2 ? argv[2] : "output.csv";
+
+  // std::ofstream ofile(outputFile);
+
+  // if (!ofile.is_open()) {
+  //   std::cerr << "Error opening file" << std::endl;
+  //   return 1;
+  // }
+
+  // // from_vertex_id;
+  // // to_vertex_id;
+  // // weight;
+  // // geom;
+  // // was_one_way;
+  // // edge_id;
+  // // osm_way_from;
+  // // osm_way_to;
+  // // osm_way_from_source_node;
+  // // osm_way_from_target_node;
+  // // osm_way_to_source_node;
+  // // osm_way_to_target_node
+
+  // ofile
+  //     // << "from_vertex_id,"
+  //     // << "to_vertex_id,"
+  //     << "weight,"
+  //     << "geom,"
+  //     << "was_one_way,"
+  //     // << "edge_id,"
+  //     << "osm_way_from,"
+  //     << "osm_way_to,"
+  //     << "osm_way_from_source_node,"
+  //     << "osm_way_from_target_node,"
+  //     << "osm_way_to_source_node,"
+  //     << "osm_way_to_target_node" << std::endl;
+
+  // for (auto ipix : usedPixels) {
+  //   int fd_e = open(
+  //       numFilename("./bin/geo-partitions/edges/edges-", ipix, "bin").data(),
+  //       O_RDONLY);
+  //   int fd_be = open(
+  //       numFilename("./bin/geo-partitions/border-edges/edges-", ipix, "bin")
+  //           .data(),
+  //       O_RDONLY);
+
+  //   int fd_ee = open(
+  //       numFilename("./bin/geo-partitions/exp-edges/exp-edges-", ipix, "bin")
+  //           .data(),
+  //       O_RDONLY);
+
+  //   int fd_eg =
+  //       open(numFilename("./bin/geo-partitions/edge-geometry/geo-", ipix,
+  //       "bin")
+  //                .data(),
+  //            O_RDONLY);
+  //   int fd_beg =
+  //       open(numFilename("./bin/geo-partitions/border-edge-geometry/geo-",
+  //       ipix,
+  //                        "bin")
+  //                .data(),
+  //            O_RDONLY);
+
+  //   FileRead edgesFileRead(fd_e);
+  //   FileRead borderEdgesFileRead(fd_be);
+  //   FileRead expEdgesFileRead(fd_ee);
+  //   FileRead edgeGeomFileRead(fd_eg);
+  //   FileRead borderEdgeGeomFileRead(fd_beg);
+
+  //   void* map_e = edgesFileRead.mmap_file();
+  //   parser::Edge* edges =
+  //       reinterpret_cast<parser::Edge*>(static_cast<char*>(map_e));
+  //   void* map_be = borderEdgesFileRead.mmap_file();
+  //   parser::Edge* borderEdges =
+  //       reinterpret_cast<parser::Edge*>(static_cast<char*>(map_be));
+  //   void* map_ee = expEdgesFileRead.mmap_file();
+  //   void* map_eg = edgeGeomFileRead.mmap_file();
+  //   std::pair<double, double>* edgeGeom =
+  //       reinterpret_cast<std::pair<double, double>*>(
+  //           static_cast<char*>(map_eg));
+  //   void* map_beg = borderEdgeGeomFileRead.mmap_file();
+  //   std::pair<double, double>* borderEdgeGeom =
+  //       reinterpret_cast<std::pair<double, double>*>(
+  //           static_cast<char*>(map_beg));
+
+  //   uint64_t eeCount = expEdgesFileRead.fsize() /
+  //   sizeof(parser::ExpandedEdge);
+
+  //   uint64_t beCount = borderEdgesFileRead.fsize() / sizeof(parser::Edge);
+
+  //   for (uint64_t i = 0; i < eeCount; i++) {
+  //     parser::ExpandedEdge* expEdge =
+  //     reinterpret_cast<parser::ExpandedEdge*>(
+  //         static_cast<char*>(map_ee) + i * sizeof(parser::ExpandedEdge));
+
+  //     parser::Edge* sourceEdge;
+
+  //     if (expEdge->sourcePart > 0) {
+  //       sourceEdge = edges + expEdge->sourceEdgeOffset;
+  //     } else {
+  //       sourceEdge = borderEdges + expEdge->sourceEdgeOffset;
+  //     }
 
-      for (uint64_t j = midPoint.first + 1; j < sourceGeomList.size(); j++) {
-        firstHalfGeom.push_back(sourceGeomList[j]);
-      }
+  //     parser::Edge* targetEdge;
 
-      std::pair<double, double>* targetGeom;
+  //     if (expEdge->targetPart > 0) {
+  //       targetEdge = edges + expEdge->targetEdgeOffset;
+  //     } else {
+  //       targetEdge = borderEdges + expEdge->targetEdgeOffset;
+  //     }
+
+  //     // std::cerr << "before" << std::endl;
+
+  //     // std::cerr << expEdge->sourcePart << std::endl;
+  //     // std::cerr << expEdge->targetEdgeOffset << std::endl;
+
+  //     auto from_vertex_id = sourceEdge->id;
+  //     auto to_vertex_id = targetEdge->id;
+  //     auto weight = expEdge->cost;
+
+  //     // std::cerr << "after" << std::endl;
+
+  //     std::pair<double, double>* sourceGeom;
+
+  //     if (sourceEdge->part > 0) {
+  //       sourceGeom = edgeGeom + sourceEdge->geomOffset;
+  //     } else {
+  //       // std::cerr << "offset: " << sourceEdge->geomOffset << std::endl;
+  //       sourceGeom = borderEdgeGeom + sourceEdge->geomOffset;
+  //     }
+
+  //     std::vector<std::pair<double, double>> sourceGeomList;
+
+  //     // std::cerr << "before source geom: " << i << std::endl;
+
+  //     if (sourceEdge->geomSize > 0) {
+  //       for (uint64_t j = 0; j < sourceEdge->geomSize; j++) {
+  //         sourceGeomList.push_back(*(sourceGeom + j));
+  //       }
+  //     } else {
+  //       for (int64_t j = -sourceEdge->geomSize - 1; j >= 0; j--) {
+  //         sourceGeomList.push_back(*(sourceGeom + j));
+  //       }
+  //     }
+
+  //     // // std::cerr << "after target geom" << std::endl;
+
+  //     auto midPoint = findMiddlePoint(sourceGeomList);
+
+  //     std::vector<std::pair<double, double>> firstHalfGeom;
+  //     firstHalfGeom.push_back(midPoint.second);
 
-      if (targetEdge->part > 0) {
-        targetGeom = edgeGeom + targetEdge->geomOffset;
-      } else {
-        targetGeom = borderEdgeGeom + targetEdge->geomOffset;
-      }
+  //     for (uint64_t j = midPoint.first + 1; j < sourceGeomList.size(); j++) {
+  //       firstHalfGeom.push_back(sourceGeomList[j]);
+  //     }
 
-      std::vector<std::pair<double, double>> targetGeomList;
+  //     std::pair<double, double>* targetGeom;
 
-      if (targetEdge->geomSize > 0) {
-        for (uint64_t j = 0; j < targetEdge->geomSize; j++) {
-          targetGeomList.push_back(*(targetGeom + j));
-        }
-      } else {
-        for (int64_t j = -targetEdge->geomSize - 1; j >= 0; j--) {
-          targetGeomList.push_back(*(targetGeom + j));
-        }
-      }
+  //     if (targetEdge->part > 0) {
+  //       targetGeom = edgeGeom + targetEdge->geomOffset;
+  //     } else {
+  //       targetGeom = borderEdgeGeom + targetEdge->geomOffset;
+  //     }
 
-      auto midPointTarget = findMiddlePoint(targetGeomList);
+  //     std::vector<std::pair<double, double>> targetGeomList;
 
-      std::vector<std::pair<double, double>> secondHalfGeom;
-
-      for (uint64_t j = 0; j <= midPointTarget.first; j++) {
-        secondHalfGeom.push_back(targetGeomList[j]);
-      }
+  //     if (targetEdge->geomSize > 0) {
+  //       for (uint64_t j = 0; j < targetEdge->geomSize; j++) {
+  //         targetGeomList.push_back(*(targetGeom + j));
+  //       }
+  //     } else {
+  //       for (int64_t j = -targetEdge->geomSize - 1; j >= 0; j--) {
+  //         targetGeomList.push_back(*(targetGeom + j));
+  //       }
+  //     }
 
-      secondHalfGeom.push_back(midPointTarget.second);
+  //     auto midPointTarget = findMiddlePoint(targetGeomList);
 
-      auto was_one_way = sourceEdge->wasOneWay;
-      auto edge_id = expEdge->id;
-      auto osm_way_from = sourceEdge->wayId;
-      auto osm_way_to = targetEdge->wayId;
-
-      auto osm_way_from_source_node = sourceEdge->sourceNodeId;
-      auto osm_way_from_target_node = sourceEdge->targetNodeId;
-      auto osm_way_to_source_node = targetEdge->sourceNodeId;
-      auto osm_way_to_target_node = targetEdge->targetNodeId;
+  //     std::vector<std::pair<double, double>> secondHalfGeom;
 
-      // ofile << from_vertex_id << ",";
-      // ofile << to_vertex_id << ",";
-      ofile << std::fixed << std::setprecision(6) << weight << ",";
-      ofile << "LINESTRING(";
+  //     for (uint64_t j = 0; j <= midPointTarget.first; j++) {
+  //       secondHalfGeom.push_back(targetGeomList[j]);
+  //     }
+
+  //     secondHalfGeom.push_back(midPointTarget.second);
 
-      for (uint64_t j = 0; j < firstHalfGeom.size(); j++) {
-        ofile << std::fixed << std::setprecision(6) << firstHalfGeom[j].second
-              << " " << firstHalfGeom[j].first << ";";
-      }
-      for (uint64_t j = 0; j < secondHalfGeom.size(); j++) {
-        ofile << std::fixed << std::setprecision(6) << secondHalfGeom[j].second
-              << " " << secondHalfGeom[j].first;
-        if (j != secondHalfGeom.size() - 1) {
-          ofile << ";";
-        }
-      }
+  //     auto was_one_way = sourceEdge->wasOneWay;
+  //     auto edge_id = expEdge->id;
+  //     auto osm_way_from = sourceEdge->wayId;
+  //     auto osm_way_to = targetEdge->wayId;
 
-      ofile << ")"
-            << ",";
+  //     auto osm_way_from_source_node = sourceEdge->sourceNodeId;
+  //     auto osm_way_from_target_node = sourceEdge->targetNodeId;
+  //     auto osm_way_to_source_node = targetEdge->sourceNodeId;
+  //     auto osm_way_to_target_node = targetEdge->targetNodeId;
+
+  //     // ofile << from_vertex_id << ",";
+  //     // ofile << to_vertex_id << ",";
+  //     ofile << std::fixed << std::setprecision(6) << weight << ",";
+  //     ofile << "LINESTRING(";
 
-      ofile << (was_one_way ? "true" : "false") << ",";
-      // ofile << edge_id << ",";
-      ofile << osm_way_from << ",";
-      ofile << osm_way_to << ",";
-      ofile << osm_way_from_source_node << ",";
-      ofile << osm_way_from_target_node << ",";
-      ofile << osm_way_to_source_node << ",";
-      ofile << osm_way_to_target_node << std::endl;
-    }
-
-    edgesFileRead.unmap_file();
-    edgesFileRead.close_fd();
-
-    borderEdgesFileRead.unmap_file();
-    borderEdgesFileRead.close_fd();
-
-    expEdgesFileRead.unmap_file();
-    expEdgesFileRead.close_fd();
-
-    edgeGeomFileRead.unmap_file();
-    edgeGeomFileRead.close_fd();
-
-    borderEdgeGeomFileRead.unmap_file();
-    borderEdgeGeomFileRead.close_fd();
-  }
-
-  int fd_bee =
-      open("./bin/geo-partitions/exp-edges/border-exp-edges.bin", O_RDONLY);
-
-  FileRead borderExpEdgesRead(fd_bee);
-
-  void* map_bee = borderExpEdgesRead.mmap_file();
-
-  uint64_t beeCount = borderExpEdgesRead.fsize() / sizeof(parser::ExpandedEdge);
-
-  std::unordered_map<long, std::vector<parser::ExpandedEdge*>> beeTab;
-
-  for (uint64_t i = 0; i < beeCount; i++) {
-    parser::ExpandedEdge* expEdge = reinterpret_cast<parser::ExpandedEdge*>(
-        static_cast<char*>(map_bee) + i * sizeof(parser::ExpandedEdge));
-
-    long ipix = -expEdge->sourcePart;
-
-    auto it = beeTab.find(ipix);
-
-    if (it == beeTab.end()) {
-      it = beeTab
-               .emplace(std::piecewise_construct, std::forward_as_tuple(ipix),
-                        std::forward_as_tuple())
-               .first;
-      it->second.push_back(expEdge);
-    } else {
-      it->second.push_back(expEdge);
-    }
-
-    // beeTab.emplace(ipix, expEdge);
-  }
-
-  for (const auto& [ipix, buf] : beeTab) {
-    int fd_be_source = open(
-        numFilename("./bin/geo-partitions/border-edges/edges-", ipix, "bin")
-            .data(),
-        O_RDONLY);
-    FileRead borderEdgesSourceRead(fd_be_source);
-
-    void* map_be_source = borderEdgesSourceRead.mmap_file();
-
-    parser::Edge* borderEdgesSource =
-        reinterpret_cast<parser::Edge*>(static_cast<char*>(map_be_source));
-
-    int fd_beg_source =
-        open(numFilename("./bin/geo-partitions/border-edge-geometry/geo-", ipix,
-                         "bin")
-                 .data(),
-             O_RDONLY);
-    FileRead borderEdgeGeomSourceRead(fd_beg_source);
-
-    void* map_beg_source = borderEdgeGeomSourceRead.mmap_file();
-
-    std::pair<double, double>* borderEdgeGeoms =
-        reinterpret_cast<std::pair<double, double>*>(
-            static_cast<char*>(map_beg_source));
-
-    std::unordered_map<long, std::vector<parser::ExpandedEdge*>>
-        expEdgesByTargetIpix;
-
-    for (auto expEdgePtr : buf) {
-      long targetIpix = -expEdgePtr->targetPart;
-
-      auto it = expEdgesByTargetIpix.find(targetIpix);
-
-      if (it == expEdgesByTargetIpix.end()) {
-        it = expEdgesByTargetIpix
-                 .emplace(std::piecewise_construct,
-                          std::forward_as_tuple(targetIpix),
-                          std::forward_as_tuple())
-                 .first;
-      }
-
-      it->second.push_back(expEdgePtr);
-    }
-
-    for (const auto& [targetIpix, targetBuf] : expEdgesByTargetIpix) {
-      int fd_be_target =
-          open(numFilename("./bin/geo-partitions/border-edges/edges-",
-                           targetIpix, "bin")
-                   .data(),
-               O_RDONLY);
-      FileRead borderEdgesTargetRead(fd_be_target);
-      void* map_be_target = borderEdgesTargetRead.mmap_file();
-      parser::Edge* borderEdgesTarget =
-          reinterpret_cast<parser::Edge*>(static_cast<char*>(map_be_target));
-
-      int fd_beg_target =
-          open(numFilename("./bin/geo-partitions/border-edge-geometry/geo-",
-                           targetIpix, "bin")
-                   .data(),
-               O_RDONLY);
-      FileRead borderEdgeGeomTargetRead(fd_beg_target);
-      void* map_beg_target = borderEdgeGeomTargetRead.mmap_file();
-      std::pair<double, double>* borderEdgeGeomsTarget =
-          reinterpret_cast<std::pair<double, double>*>(
-              static_cast<char*>(map_beg_target));
-
-      for (auto ee : targetBuf) {
-        parser::Edge* sourceEdge = borderEdgesSource + ee->sourceEdgeOffset;
-
-        parser::Edge* targetEdge = borderEdgesTarget + ee->targetEdgeOffset;
-
-        auto from_vertex_id = sourceEdge->id;
-        auto to_vertex_id = targetEdge->id;
-        auto weight = ee->cost;
-
-        std::pair<double, double>* sourceGeom =
-            borderEdgeGeoms + sourceEdge->geomOffset;
-
-        std::vector<std::pair<double, double>> sourceGeomList;
-
-        if (sourceEdge->geomSize > 0) {
-          for (uint64_t j = 0; j < sourceEdge->geomSize; j++) {
-            sourceGeomList.push_back(*(sourceGeom + j));
-          }
-        } else {
-          for (int64_t j = -sourceEdge->geomSize - 1; j >= 0; j--) {
-            sourceGeomList.push_back(*(sourceGeom + j));
-          }
-        }
-
-        auto midPoint = findMiddlePoint(sourceGeomList);
-
-        std::vector<std::pair<double, double>> firstHalfGeom;
-        firstHalfGeom.push_back(midPoint.second);
-
-        for (uint64_t j = midPoint.first + 1; j < sourceGeomList.size(); j++) {
-          firstHalfGeom.push_back(sourceGeomList[j]);
-        }
-
-        std::pair<double, double>* targetGeom =
-            borderEdgeGeomsTarget + targetEdge->geomOffset;
-
-        std::vector<std::pair<double, double>> targetGeomList;
-
-        if (targetEdge->geomSize > 0) {
-          for (uint64_t j = 0; j < targetEdge->geomSize; j++) {
-            targetGeomList.push_back(*(targetGeom + j));
-          }
-        } else {
-          for (int64_t j = -targetEdge->geomSize - 1; j >= 0; j--) {
-            targetGeomList.push_back(*(targetGeom + j));
-          }
-        }
-
-        auto midPointTarget = findMiddlePoint(targetGeomList);
-
-        std::vector<std::pair<double, double>> secondHalfGeom;
-
-        for (uint64_t j = 0; j <= midPointTarget.first; j++) {
-          secondHalfGeom.push_back(targetGeomList[j]);
-        }
-
-        secondHalfGeom.push_back(midPointTarget.second);
-
-        auto was_one_way = sourceEdge->wasOneWay;
-        auto edge_id = ee->id;
-        auto osm_way_from = sourceEdge->wayId;
-        auto osm_way_to = targetEdge->wayId;
-
-        auto osm_way_from_source_node = sourceEdge->sourceNodeId;
-        auto osm_way_from_target_node = sourceEdge->targetNodeId;
-        auto osm_way_to_source_node = targetEdge->sourceNodeId;
-        auto osm_way_to_target_node = targetEdge->targetNodeId;
-
-        // ofile << from_vertex_id << ",";
-        // ofile << to_vertex_id << ",";
-        ofile << std::fixed << std::setprecision(6) << weight << ",";
-        ofile << "LINESTRING(";
-
-        for (uint64_t j = 0; j < firstHalfGeom.size(); j++) {
-          ofile << std::fixed << std::setprecision(6) << firstHalfGeom[j].second
-                << " " << firstHalfGeom[j].first << ";";
-        }
-        for (uint64_t j = 0; j < secondHalfGeom.size(); j++) {
-          ofile << std::fixed << std::setprecision(6)
-                << secondHalfGeom[j].second << " " << secondHalfGeom[j].first;
-          if (j != secondHalfGeom.size() - 1) {
-            ofile << ";";
-          }
-        }
-
-        ofile << ")"
-              << ",";
-
-        ofile << (was_one_way ? "true" : "false") << ",";
-        // ofile << edge_id << ",";
-        ofile << osm_way_from << ",";
-        ofile << osm_way_to << ",";
-        ofile << osm_way_from_source_node << ",";
-        ofile << osm_way_from_target_node << ",";
-        ofile << osm_way_to_source_node << ",";
-        ofile << osm_way_to_target_node << std::endl;
-      }
-
-      borderEdgesTargetRead.unmap_file();
-      borderEdgesTargetRead.close_fd();
-
-      borderEdgeGeomTargetRead.unmap_file();
-      borderEdgeGeomTargetRead.close_fd();
-    }
-    borderEdgeGeomSourceRead.unmap_file();
-    borderEdgeGeomSourceRead.close_fd();
-
-    borderEdgesSourceRead.unmap_file();
-    borderEdgesSourceRead.close_fd();
-  }
+  //     for (uint64_t j = 0; j < firstHalfGeom.size(); j++) {
+  //       ofile << std::fixed << std::setprecision(6) <<
+  //       firstHalfGeom[j].second
+  //             << " " << firstHalfGeom[j].first << ";";
+  //     }
+  //     for (uint64_t j = 0; j < secondHalfGeom.size(); j++) {
+  //       ofile << std::fixed << std::setprecision(6) <<
+  //       secondHalfGeom[j].second
+  //             << " " << secondHalfGeom[j].first;
+  //       if (j != secondHalfGeom.size() - 1) {
+  //         ofile << ";";
+  //       }
+  //     }
+
+  //     ofile << ")"
+  //           << ",";
+
+  //     ofile << (was_one_way ? "true" : "false") << ",";
+  //     // ofile << edge_id << ",";
+  //     ofile << osm_way_from << ",";
+  //     ofile << osm_way_to << ",";
+  //     ofile << osm_way_from_source_node << ",";
+  //     ofile << osm_way_from_target_node << ",";
+  //     ofile << osm_way_to_source_node << ",";
+  //     ofile << osm_way_to_target_node << std::endl;
+  //   }
+
+  //   edgesFileRead.unmap_file();
+  //   edgesFileRead.close_fd();
+
+  //   borderEdgesFileRead.unmap_file();
+  //   borderEdgesFileRead.close_fd();
+
+  //   expEdgesFileRead.unmap_file();
+  //   expEdgesFileRead.close_fd();
+
+  //   edgeGeomFileRead.unmap_file();
+  //   edgeGeomFileRead.close_fd();
+
+  //   borderEdgeGeomFileRead.unmap_file();
+  //   borderEdgeGeomFileRead.close_fd();
+  // }
+
+  // int fd_bee =
+  //     open("./bin/geo-partitions/exp-edges/border-exp-edges.bin", O_RDONLY);
+
+  // FileRead borderExpEdgesRead(fd_bee);
+
+  // void* map_bee = borderExpEdgesRead.mmap_file();
+
+  // uint64_t beeCount = borderExpEdgesRead.fsize() /
+  // sizeof(parser::ExpandedEdge);
+
+  // std::unordered_map<long, std::vector<parser::ExpandedEdge*>> beeTab;
+
+  // for (uint64_t i = 0; i < beeCount; i++) {
+  //   parser::ExpandedEdge* expEdge = reinterpret_cast<parser::ExpandedEdge*>(
+  //       static_cast<char*>(map_bee) + i * sizeof(parser::ExpandedEdge));
+
+  //   long ipix = -expEdge->sourcePart;
+
+  //   auto it = beeTab.find(ipix);
+
+  //   if (it == beeTab.end()) {
+  //     it = beeTab
+  //              .emplace(std::piecewise_construct,
+  //              std::forward_as_tuple(ipix),
+  //                       std::forward_as_tuple())
+  //              .first;
+  //     it->second.push_back(expEdge);
+  //   } else {
+  //     it->second.push_back(expEdge);
+  //   }
+
+  //   // beeTab.emplace(ipix, expEdge);
+  // }
+
+  // for (const auto& [ipix, buf] : beeTab) {
+  //   int fd_be_source = open(
+  //       numFilename("./bin/geo-partitions/border-edges/edges-", ipix, "bin")
+  //           .data(),
+  //       O_RDONLY);
+  //   FileRead borderEdgesSourceRead(fd_be_source);
+
+  //   void* map_be_source = borderEdgesSourceRead.mmap_file();
+
+  //   parser::Edge* borderEdgesSource =
+  //       reinterpret_cast<parser::Edge*>(static_cast<char*>(map_be_source));
+
+  //   int fd_beg_source =
+  //       open(numFilename("./bin/geo-partitions/border-edge-geometry/geo-",
+  //       ipix,
+  //                        "bin")
+  //                .data(),
+  //            O_RDONLY);
+  //   FileRead borderEdgeGeomSourceRead(fd_beg_source);
+
+  //   void* map_beg_source = borderEdgeGeomSourceRead.mmap_file();
+
+  //   std::pair<double, double>* borderEdgeGeoms =
+  //       reinterpret_cast<std::pair<double, double>*>(
+  //           static_cast<char*>(map_beg_source));
+
+  //   std::unordered_map<long, std::vector<parser::ExpandedEdge*>>
+  //       expEdgesByTargetIpix;
+
+  //   for (auto expEdgePtr : buf) {
+  //     long targetIpix = -expEdgePtr->targetPart;
+
+  //     auto it = expEdgesByTargetIpix.find(targetIpix);
+
+  //     if (it == expEdgesByTargetIpix.end()) {
+  //       it = expEdgesByTargetIpix
+  //                .emplace(std::piecewise_construct,
+  //                         std::forward_as_tuple(targetIpix),
+  //                         std::forward_as_tuple())
+  //                .first;
+  //     }
+
+  //     it->second.push_back(expEdgePtr);
+  //   }
+
+  //   for (const auto& [targetIpix, targetBuf] : expEdgesByTargetIpix) {
+  //     int fd_be_target =
+  //         open(numFilename("./bin/geo-partitions/border-edges/edges-",
+  //                          targetIpix, "bin")
+  //                  .data(),
+  //              O_RDONLY);
+  //     FileRead borderEdgesTargetRead(fd_be_target);
+  //     void* map_be_target = borderEdgesTargetRead.mmap_file();
+  //     parser::Edge* borderEdgesTarget =
+  //         reinterpret_cast<parser::Edge*>(static_cast<char*>(map_be_target));
+
+  //     int fd_beg_target =
+  //         open(numFilename("./bin/geo-partitions/border-edge-geometry/geo-",
+  //                          targetIpix, "bin")
+  //                  .data(),
+  //              O_RDONLY);
+  //     FileRead borderEdgeGeomTargetRead(fd_beg_target);
+  //     void* map_beg_target = borderEdgeGeomTargetRead.mmap_file();
+  //     std::pair<double, double>* borderEdgeGeomsTarget =
+  //         reinterpret_cast<std::pair<double, double>*>(
+  //             static_cast<char*>(map_beg_target));
+
+  //     for (auto ee : targetBuf) {
+  //       parser::Edge* sourceEdge = borderEdgesSource + ee->sourceEdgeOffset;
+
+  //       parser::Edge* targetEdge = borderEdgesTarget + ee->targetEdgeOffset;
+
+  //       auto from_vertex_id = sourceEdge->id;
+  //       auto to_vertex_id = targetEdge->id;
+  //       auto weight = ee->cost;
+
+  //       std::pair<double, double>* sourceGeom =
+  //           borderEdgeGeoms + sourceEdge->geomOffset;
+
+  //       std::vector<std::pair<double, double>> sourceGeomList;
+
+  //       if (sourceEdge->geomSize > 0) {
+  //         for (uint64_t j = 0; j < sourceEdge->geomSize; j++) {
+  //           sourceGeomList.push_back(*(sourceGeom + j));
+  //         }
+  //       } else {
+  //         for (int64_t j = -sourceEdge->geomSize - 1; j >= 0; j--) {
+  //           sourceGeomList.push_back(*(sourceGeom + j));
+  //         }
+  //       }
+
+  //       auto midPoint = findMiddlePoint(sourceGeomList);
+
+  //       std::vector<std::pair<double, double>> firstHalfGeom;
+  //       firstHalfGeom.push_back(midPoint.second);
+
+  //       for (uint64_t j = midPoint.first + 1; j < sourceGeomList.size(); j++)
+  //       {
+  //         firstHalfGeom.push_back(sourceGeomList[j]);
+  //       }
+
+  //       std::pair<double, double>* targetGeom =
+  //           borderEdgeGeomsTarget + targetEdge->geomOffset;
+
+  //       std::vector<std::pair<double, double>> targetGeomList;
+
+  //       if (targetEdge->geomSize > 0) {
+  //         for (uint64_t j = 0; j < targetEdge->geomSize; j++) {
+  //           targetGeomList.push_back(*(targetGeom + j));
+  //         }
+  //       } else {
+  //         for (int64_t j = -targetEdge->geomSize - 1; j >= 0; j--) {
+  //           targetGeomList.push_back(*(targetGeom + j));
+  //         }
+  //       }
+
+  //       auto midPointTarget = findMiddlePoint(targetGeomList);
+
+  //       std::vector<std::pair<double, double>> secondHalfGeom;
+
+  //       for (uint64_t j = 0; j <= midPointTarget.first; j++) {
+  //         secondHalfGeom.push_back(targetGeomList[j]);
+  //       }
+
+  //       secondHalfGeom.push_back(midPointTarget.second);
+
+  //       auto was_one_way = sourceEdge->wasOneWay;
+  //       auto edge_id = ee->id;
+  //       auto osm_way_from = sourceEdge->wayId;
+  //       auto osm_way_to = targetEdge->wayId;
+
+  //       auto osm_way_from_source_node = sourceEdge->sourceNodeId;
+  //       auto osm_way_from_target_node = sourceEdge->targetNodeId;
+  //       auto osm_way_to_source_node = targetEdge->sourceNodeId;
+  //       auto osm_way_to_target_node = targetEdge->targetNodeId;
+
+  //       // ofile << from_vertex_id << ",";
+  //       // ofile << to_vertex_id << ",";
+  //       ofile << std::fixed << std::setprecision(6) << weight << ",";
+  //       ofile << "LINESTRING(";
+
+  //       for (uint64_t j = 0; j < firstHalfGeom.size(); j++) {
+  //         ofile << std::fixed << std::setprecision(6) <<
+  //         firstHalfGeom[j].second
+  //               << " " << firstHalfGeom[j].first << ";";
+  //       }
+  //       for (uint64_t j = 0; j < secondHalfGeom.size(); j++) {
+  //         ofile << std::fixed << std::setprecision(6)
+  //               << secondHalfGeom[j].second << " " <<
+  //               secondHalfGeom[j].first;
+  //         if (j != secondHalfGeom.size() - 1) {
+  //           ofile << ";";
+  //         }
+  //       }
+
+  //       ofile << ")"
+  //             << ",";
+
+  //       ofile << (was_one_way ? "true" : "false") << ",";
+  //       // ofile << edge_id << ",";
+  //       ofile << osm_way_from << ",";
+  //       ofile << osm_way_to << ",";
+  //       ofile << osm_way_from_source_node << ",";
+  //       ofile << osm_way_from_target_node << ",";
+  //       ofile << osm_way_to_source_node << ",";
+  //       ofile << osm_way_to_target_node << std::endl;
+  //     }
+
+  //     borderEdgesTargetRead.unmap_file();
+  //     borderEdgesTargetRead.close_fd();
+
+  //     borderEdgeGeomTargetRead.unmap_file();
+  //     borderEdgeGeomTargetRead.close_fd();
+  //   }
+  //   borderEdgeGeomSourceRead.unmap_file();
+  //   borderEdgeGeomSourceRead.close_fd();
+
+  //   borderEdgesSourceRead.unmap_file();
+  //   borderEdgesSourceRead.close_fd();
+  // }
 
   return 0;
 }

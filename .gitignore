@@ -4,8 +4,14 @@ test-data
 main
 *.csv
 bin/geo-partitions/edges/*
+bin/node-hash-partitions/node-data/*
+bin/node-hash-partitions/reduced-nodes/*
 bin/geo-partitions/exp-edges/*
 bin/geo-partitions/nodes/*
+bin/geo-partitions/border-edge-geometry/*
+bin/geo-partitions/edge-geometry/*
+bin/geo-partitions/border-nodes/*
+bin/geo-partitions/border-edges/*
 bin/node-hash-partitions/nodes/*
 bin/node-hash-partitions/used-nodes/*
 bin/way-hash-partitions/ways/*

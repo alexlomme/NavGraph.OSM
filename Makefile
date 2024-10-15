@@ -22,9 +22,6 @@ SRC				   := ./include/osmpbf/osmformat.pb.cc \
                       ./include/graph/graph.cpp \
                       ./include/processing.cpp \
                       ./include/parsing/primitive-block-parser.cpp
-                    #   ./include/parsing/parsing-functions.cpp
-                    # ./include/graph/ways-to-edges.cpp
-# -lz -lexpat -lbz2
 
 main:
 	$(CXX) -g main.cpp $(SRC) $(CXXFLAGS) -o main

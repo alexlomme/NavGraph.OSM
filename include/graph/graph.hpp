@@ -17,15 +17,6 @@ struct Graph {
  public:
   Graph(parser::Edge* edges, size_t edgesCount);
 
-  void invert(std::vector<parser::Edge>& edges,
-              std::unordered_multimap<
-                  std::tuple<google::protobuf::int64, google::protobuf::int64>,
-                  parser::Restriction*>& mandatoryRestrictions,
-              std::unordered_map<
-                  std::tuple<google::protobuf::int64, google::protobuf::int64>,
-                  parser::Restriction*>& forbidRestrictions,
-              std::vector<parser::ExpandedEdge>& expEdgesBuffer);
-
   std::unordered_map<google::protobuf::int64,
                      std::vector<parser::Edge*>>::iterator
   find(google::protobuf::int64 nodeId);
