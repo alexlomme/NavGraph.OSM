@@ -2,7 +2,8 @@
 
 #include "osmpbf/osmformat.pb.h"
 
-namespace parser {
+namespace ngosm {
+namespace types {
 struct Node {
   google::protobuf::int64 id;
   double lat;
@@ -11,4 +12,5 @@ struct Node {
   Node(google::protobuf::int64 id, double lat, double lon)
       : id(id), lat(lat), lon(lon) {}
 };
-}  // namespace parser
+}  // namespace types
+}  // namespace ngosm

@@ -2,7 +2,8 @@
 
 #include <osmpbf/osmformat.pb.h>
 
-namespace parser {
+namespace ngosm {
+namespace types {
 
 inline const std::unordered_set<std::string> supportedHighwayTypes{
     "motorway",      "primary",        "primary_link", "road",
@@ -17,4 +18,5 @@ struct Way {
   bool oneway;
 };
 
-}  // namespace parser
+}  // namespace types
+}  // namespace ngosm

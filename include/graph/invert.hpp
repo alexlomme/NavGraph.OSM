@@ -6,22 +6,22 @@
 #include <unordered_map>
 #include <utils/hashing.hpp>
 
-namespace parser {
+namespace ngosm {
 namespace graph {
 namespace invert {
 
 void applyRestrictions(
-    parser::Edge* sourceEdge, long sourceIpix, uint64_t sourceOffset,
-    std::vector<std::tuple<parser::Edge*, long, uint64_t>>& outgoingEdges,
-    parser::Node* nodes,
+    ngosm::types::Edge* sourceEdge, long sourceIpix, uint64_t sourceOffset,
+    std::vector<std::tuple<ngosm::types::Edge*, long, uint64_t>>& outgoingEdges,
+    ngosm::types::Node* nodes,
     std::unordered_multimap<
         std::tuple<google::protobuf::int64, google::protobuf::int64>,
-        parser::Restriction*>& onlyRestrictionsHash,
+        ngosm::types::Restriction*>& onlyRestrictionsHash,
     std::unordered_map<
         std::tuple<google::protobuf::int64, google::protobuf::int64>,
-        parser::Restriction*>& noRestrictionsHash,
+        ngosm::types::Restriction*>& noRestrictionsHash,
     google::protobuf::int64& expandedEdgeId,
-    FileWrite<parser::ExpandedEdge>& expEdgesFileWrite) {
+    FileWrite<ngosm::types::ExpandedEdge>& expEdgesFileWrite) {
   auto viaNodeId = sourceEdge->targetNodeId;
 
   auto mandRestRange = onlyRestrictionsHash.equal_range(
@@ -72,7 +72,7 @@ void applyRestrictions(
       if (forbidRestPairIt != noRestrictionsHash.end()) {
         return;
       }
-      expEdgesFileWrite.add(parser::ExpandedEdge{
+      expEdgesFileWrite.add(ngosm::types::ExpandedEdge{
           expandedEdgeId, sourceIpix, sourceOffset, get<1>(*targetEdgePtrIt),
           get<2>(*targetEdgePtrIt),
           (sourceEdge->cost + (get<0>(*targetEdgePtrIt))->cost) / 2});
@@ -105,7 +105,7 @@ void applyRestrictions(
       continue;
     }
 
-    expEdgesFileWrite.add(parser::ExpandedEdge{
+    expEdgesFileWrite.add(ngosm::types::ExpandedEdge{
         expandedEdgeId, sourceIpix, sourceOffset, get<1>(tuple), get<2>(tuple),
         (sourceEdge->cost + targetEdge.cost) / 2});
 
@@ -114,4 +114,4 @@ void applyRestrictions(
 }
 }  // namespace invert
 }  // namespace graph
-}  // namespace parser
+}  // namespace ngosm

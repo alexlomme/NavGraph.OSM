@@ -11,29 +11,29 @@
 #include <types/relation.hpp>
 #include <utils/hashing.hpp>
 
-namespace parser {
+namespace ngosm {
 namespace graph {
 struct Graph {
  public:
-  Graph(parser::Edge* edges, size_t edgesCount);
+  Graph(ngosm::types::Edge* edges, size_t edgesCount);
 
   std::unordered_map<google::protobuf::int64,
-                     std::vector<parser::Edge*>>::iterator
+                     std::vector<ngosm::types::Edge*>>::iterator
   find(google::protobuf::int64 nodeId);
 
   std::unordered_map<google::protobuf::int64,
-                     std::vector<parser::Edge*>>::iterator
+                     std::vector<ngosm::types::Edge*>>::iterator
   end();
 
-  std::unordered_map<google::protobuf::int64, std::vector<parser::Edge*>>&
+  std::unordered_map<google::protobuf::int64, std::vector<ngosm::types::Edge*>>&
   graph();
 
  private:
-  std::unordered_map<google::protobuf::int64, std::vector<parser::Edge*>>
+  std::unordered_map<google::protobuf::int64, std::vector<ngosm::types::Edge*>>
       vertEdgeMap;
   std::unordered_map<google::protobuf::int64,
                      std::vector<google::protobuf::int64>>
       invVertEdgeMap;
 };
 }  // namespace graph
-}  // namespace parser
+}  // namespace ngosm

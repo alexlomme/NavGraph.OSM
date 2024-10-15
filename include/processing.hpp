@@ -7,23 +7,23 @@
 #include <utils/hashing.hpp>
 #include <vector>
 
-namespace parser {
+namespace ngosm {
 namespace processing {
 
 template <typename T>
 using buffer = std::vector<T>;
 
-using node_buffer_t = buffer<parser::Node>;
-using way_buffer_t = buffer<parser::Way>;
-using restriction_buffer_t = buffer<parser::Restriction>;
+using node_buffer_t = buffer<ngosm::types::Node>;
+using way_buffer_t = buffer<ngosm::types::Way>;
+using restriction_buffer_t = buffer<ngosm::types::Restriction>;
 
 template <typename K, typename V>
 using hashtable = std::unordered_map<K, V>;
 
 using no_restriction_map_t =
     hashtable<std::tuple<google::protobuf::int64, google::protobuf::int64>,
-              parser::Restriction*>;
-using node_map = hashtable<google::protobuf::int64, parser::Node*>;
+              ngosm::types::Restriction*>;
+using node_map = hashtable<google::protobuf::int64, ngosm::types::Node*>;
 
 template <typename K, typename V>
 using ska_hashtable = ska::flat_hash_map<K, V>;
@@ -34,14 +34,14 @@ template <typename K, typename V>
 using multimap = std::unordered_multimap<K, V>;
 
 using only_restrictions_by_to =
-    multimap<google::protobuf::int64, parser::Restriction*>;
+    multimap<google::protobuf::int64, ngosm::types::Restriction*>;
 using only_restriction_mm =
     multimap<std::tuple<google::protobuf::int64, google::protobuf::int64>,
-             parser::Restriction*>;
+             ngosm::types::Restriction*>;
 
 void hash_restrictions(restriction_buffer_t& buffer,
                        only_restrictions_by_to& onlyRestrictionsByTo,
                        no_restriction_map_t& noRestrictionsMap);
 
 }  // namespace processing
-}  // namespace parser
+}  // namespace ngosm

@@ -9,12 +9,12 @@
 #include <types/relation.hpp>
 #include <types/way.hpp>
 
-namespace parser {
+namespace ngosm {
 
-namespace primitive_block {
+namespace pb {
 
 double convertCoord(int64_t offset, int32_t granularity, int64_t coord);
 
-}  // namespace primitive_block
+}  // namespace pb
 
-}  // namespace parser
+}  // namespace ngosm

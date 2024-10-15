@@ -3,12 +3,12 @@
 #include <types/expanded-edge.hpp>
 #include <unordered_set>
 
-parser::graph::Graph::Graph(parser::Edge* edges, size_t edgeCount) {
+ngosm::graph::Graph::Graph(ngosm::types::Edge* edges, size_t edgeCount) {
   for (uint64_t i = 0; i < edgeCount; i++) {
     auto edgePtr = edges + i;
     auto entryIt = vertEdgeMap.find(edgePtr->sourceNodeId);
     if (entryIt == vertEdgeMap.end()) {
-      std::vector<parser::Edge*> verts;
+      std::vector<ngosm::types::Edge*> verts;
       verts.push_back(edgePtr);
       vertEdgeMap.insert(std::make_pair(edgePtr->sourceNodeId, verts));
     } else {
@@ -18,18 +18,18 @@ parser::graph::Graph::Graph(parser::Edge* edges, size_t edgeCount) {
 }
 
 std::unordered_map<google::protobuf::int64,
-                   std::vector<parser::Edge*>>::iterator
-parser::graph::Graph::find(google::protobuf::int64 nodeId) {
+                   std::vector<ngosm::types::Edge*>>::iterator
+ngosm::graph::Graph::find(google::protobuf::int64 nodeId) {
   return vertEdgeMap.find(nodeId);
 }
 
 std::unordered_map<google::protobuf::int64,
-                   std::vector<parser::Edge*>>::iterator
-parser::graph::Graph::end() {
+                   std::vector<ngosm::types::Edge*>>::iterator
+ngosm::graph::Graph::end() {
   return vertEdgeMap.end();
 }
 
-std::unordered_map<google::protobuf::int64, std::vector<parser::Edge*>>&
-parser::graph::Graph::graph() {
+std::unordered_map<google::protobuf::int64, std::vector<ngosm::types::Edge*>>&
+ngosm::graph::Graph::graph() {
   return vertEdgeMap;
 }

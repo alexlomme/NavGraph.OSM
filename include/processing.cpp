@@ -1,6 +1,6 @@
 #include "processing.hpp"
 
-namespace parser {
+namespace ngosm {
 namespace processing {
 
 void hash_restrictions(restriction_buffer_t& buffer,
@@ -18,4 +18,4 @@ void hash_restrictions(restriction_buffer_t& buffer,
 }
 
 }  // namespace processing
-}  // namespace parser
+}  // namespace ngosm

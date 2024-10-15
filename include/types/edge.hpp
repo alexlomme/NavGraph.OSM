@@ -2,10 +2,9 @@
 
 #include <osmpbf/osmformat.pb.h>
 
-#include <types/node.hpp>
-#include <types/way.hpp>
+namespace ngosm {
+namespace types {
 
-namespace parser {
 struct Edge {
   google::protobuf::int64 id;
   google::protobuf::int64 wayId;
@@ -19,4 +18,6 @@ struct Edge {
   uint64_t targetNodeOffset;
   double cost;
 };
-}  // namespace parser
+
+}  // namespace types
+}  // namespace ngosm
