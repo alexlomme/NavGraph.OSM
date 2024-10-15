@@ -34,7 +34,7 @@
 #include <queue>
 #include <sstream>
 #include <stdexcept>
-#include <tables/ska/flat_hash_map.hpp>
+#include <tables/skalib/flat_hash_map.hpp>
 #include <types/edge.hpp>
 #include <types/expanded-edge.hpp>
 #include <types/node.hpp>

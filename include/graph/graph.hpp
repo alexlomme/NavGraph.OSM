@@ -4,7 +4,7 @@
 
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <boost/unordered/unordered_node_map.hpp>
-#include <tables/ska/flat_hash_map.hpp>
+#include <tables/skalib/flat_hash_map.hpp>
 #include <types/edge.hpp>
 #include <types/expanded-edge.hpp>
 #include <types/node.hpp>

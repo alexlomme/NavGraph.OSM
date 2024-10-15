@@ -9,7 +9,7 @@
 #include <healpix/utils.hpp>
 #include <mt/mutexes.hpp>
 #include <parsing/primitive-block-parser.hpp>
-#include <tables/ska/flat_hash_map.hpp>
+#include <tables/skalib/flat_hash_map.hpp>
 #include <types/node.hpp>
 #include <types/relation.hpp>
 #include <types/way.hpp>

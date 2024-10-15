@@ -6,7 +6,7 @@
 
 #include <stdexcept>
 #include <string>
-#include <tables/ska/flat_hash_map.hpp>
+#include <tables/skalib/flat_hash_map.hpp>
 #include <unordered_map>
 #include <vector>
 

@@ -1,6 +1,6 @@
 #include <osmpbf/osmformat.pb.h>
 
-#include <tables/ska/flat_hash_map.hpp>
+#include <tables/skalib/flat_hash_map.hpp>
 #include <types/node.hpp>
 #include <types/relation.hpp>
 #include <types/way.hpp>
